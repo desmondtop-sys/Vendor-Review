@@ -1,0 +1,301 @@
+# Hydro Ottawa Vendor Security Evaluator
+
+> AI-powered vendor security assessment tool powered by Google Gemini
+
+**Created by:** Desmond Top  
+**Last Updated:** February 26, 2026
+
+---
+
+## Overview
+
+The Vendor Security Evaluator is a web-based application that analyzes vendor security documentation (SOC 2 reports, penetration tests, compliance certifications, etc.) using artificial intelligence.
+
+**Key Features:**
+- 📄 **Document Analysis** - Upload PDF security reports and documentation
+- 🤖 **AI-Powered Evaluation** - Google Gemini API analyzes vendor compliance with customizable security requirements
+- 📊 **Interactive Dashboard** - View security scores, requirement breakdowns, and detailed evidence
+- ⚙️ **Customizable Settings** - Adjust AI prompts, security requirements, and pass/fail thresholds
+- 📈 **Scoring & Simulation** - Compare candidate vendors and analyze what-if scenarios
+- 📑 **PDF Reports** - Generate professional security assessment reports
+
+---
+
+## System Architecture
+
+```
+┌────────────────────────────────────────────────────────┐
+│              Frontend (Streamlit Web UI)               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  Dashboard   │  │ Analysis     │  │ AI Settings  │  │
+│  │ • Reports    │  │ Tools        │  │ • Prompts    │  │
+│  │ • Scores     │  │ • Scoring    │  │ • Require    │  │
+│  │ • History    │  │ • Simulation │  │   ments      │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└────────────────────────┬───────────────────────────────┘
+                         │
+                         ↓
+┌───────────────────────────────────────────────────────┐
+│              Backend (Python Services)                │
+│  ┌────────────────┐  ┌─────────┐  ┌────────────────┐  │
+│  │  AI Logic      │  │ Report  │  │  Database      │  │
+│  │  • PDF         │  │ Scoring │  │  Operations    │  │
+│  │    Extraction  │  │ • Score │  │  • CRUD        │  │
+│  │  • Gemini API  │  │   Calc  │  │  • Queries     │  │
+│  │    Integration │  │ • Must- │  │  • Storage     │  │
+│  │                │  │   Pass  │  │    Management  │  │
+│  └────────────────┘  └─────────┘  └────────────────┘  │
+└────────────────────────┬──────────────────────────────┘
+                         │
+                         ↓
+┌────────────────────────────────────────────────────────┐
+│              Data Storage & External Services          │
+│  ┌──────────────────┐  ┌────────────────────────────┐  │
+│  │ SQLite Database  │  │ Google Gemini API          │  │
+│  │ • vendors.db     │  │ (Security Assessment)      │  │
+│  │ • Report data    │  │                            │  │
+│  └──────────────────┘  └────────────────────────────┘  │
+│  ┌───────────────────────────────────┐                 │
+│  │ File Storage (Backend/Storage/)   │                 │
+│  │ • PDF documents (organized by ID) │                 │
+│  └───────────────────────────────────┘                 │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Prerequisites
+
+- **Python 3.9+** (3.10+ recommended)
+- **Google Gemini API Key** - Get one free at [aistudio.google.com](https://aistudio.google.com/apikey)
+- **~500MB RAM** minimum
+- **Modern web browser** (Chrome, Firefox, Safari, Edge)
+
+---
+
+## Quick Start
+
+### 1. Clone & Setup Environment
+
+```bash
+# Navigate to project directory
+cd "Vendor Review Project"
+
+# Create virtual environment
+python -m venv venv
+
+# Activate (Windows)
+venv\Scripts\activate
+
+# Activate (Mac/Linux)
+source venv/bin/activate
+```
+
+### 2. Install Dependencies
+
+```bash
+python -m pip install -r req.txt
+```
+
+### 3. Configure Environment
+
+```bash
+# Edit .env and add your Gemini API key
+# GEMINI_API_KEY=sk-...
+```
+
+### 4. Run the Application
+
+```bash
+python -m streamlit run frontend/app.py
+```
+
+The app will open at: `http://localhost:8501`
+
+---
+
+## Usage Guide
+
+### Dashboard Tab
+- View all vendor security assessments
+- See overall security score and pass/fail status
+- Review requirement-by-requirement breakdown
+- Download PDF assessment reports
+
+### Analysis Tools Tab
+- Create simulations to test "what-if" scenarios
+- Adjust individual requirement weights
+- See real-time score impact from changes
+- Compare different security postures
+
+### AI Configuration Page
+- Edit system prompts to change AI behavior
+- Add/remove/modify security requirements
+- Adjust requirement weights and must-pass rules
+- Set pass/fail score thresholds
+- Changes apply immediately to new assessments
+
+---
+
+## Data Structure
+
+### Vendor Report
+A complete security assessment containing:
+- **Vendor Name** - Organization being evaluated
+- **Security Controls** - Pass/fail on each requirement (with evidence)
+- **Summary** - AI-generated findings and risk assessment
+- **Score** - Calculated security score (0-100%)
+- **Files** - Associated PDF documents
+
+### Security Control
+Each requirement evaluated:
+- **Requirement** - Security area being assessed (e.g., MFA, Encryption, Compliance Certifications)
+- **Status** - 1 = Pass, 0 = Fail
+- **Weight** - Importance level (1-10)
+- **Must Pass** - Dealbreaker if failed
+- **Evidence** - AI reasoning for the decision
+
+---
+
+## Configuration
+
+All configuration lives in `backend/config/`:
+
+### `instructions.txt`
+System prompt that tells the AI how to evaluate vendors. Modify to change:
+- What constitutes a "pass" vs "fail"
+- How strict the evaluation is
+- What to focus on
+- Tone and format of analysis
+
+### `requirements.json`
+Security requirement definitions:
+```json
+{
+  "MFA": {
+    "weight": 8,
+    "must_pass": true
+  },
+  "Encryption": {
+    "weight": 9,
+    "must_pass": true
+  }
+}
+```
+
+### `settings.json`
+Application thresholds:
+```json
+{
+  "pass_threshold": 80,
+  "fail_threshold": 50
+}
+```
+
+**Note:** All can be edited via the AI Configuration page in the app (no restart needed).
+
+---
+
+## File Organization
+
+```
+Vendor Review Project/
+├── README                          # This file
+├── req.txt                         # Python dependencies
+│
+├── frontend/                       # Streamlit web interface
+│   ├── app.py                      # Application entry point
+│   ├── state_manager.py            # Session state management
+│   ├── styles.py                   # CSS styling
+│   ├── utils.py                    # Helper functions
+│   │
+│   └── views/                      # UI components
+│       ├── view_controller.py      # View routing & orchestration
+│       ├── ai_settings_view.py     # Settings configuration page
+│       ├── vendors_page_view.py    # Vendor management page
+│       ├── left_sidebar_view.py    # Navigation & vendor history
+│       ├── main_col_view.py        # Main content area
+│       ├── right_sidebar_view.py   # File upload & actions
+│       ├── shared_components_view.py # Reusable UI components
+│       │
+│       ├── report_views/           # Report-specific tabs
+│       │   ├── dashboard_tab_view.py     # Overview & scores
+│       │   ├── analysis_tab_view.py      # Detailed analysis
+│       │   ├── assets_tab_view.py        # Asset information
+│       │   ├── compare_tab_view.py       # Comparison tools
+│       │   └── report_history_tab_view.py # Historical reports
+│       │
+│       └── vendor_views/           # Vendor-specific tabs
+│           └── list_tab_view.py    # Vendor list management
+│
+├── backend/                        # Core business logic
+│   ├── models.py                   # Data model definitions
+│   ├── database.py                 # SQLite operations
+│   ├── AI_logic.py                 # Gemini API integration
+│   ├── config_manager.py           # Settings management
+│   ├── report_utils.py             # Scoring calculations
+│   ├── IO_engine.py                # PDF & I/O operations
+│   ├── bitsight_client.py          # BitSight API integration
+│   ├── charts.py                   # Chart visualization
+│   │
+│   ├── config/                     # Configurable settings
+│   │   ├── instructions.txt        # AI system prompt
+│   │   ├── requirements.json       # Security requirements
+│   │   ├── settings.json           # Thresholds
+│   │   └── system_guidelines.txt   # Additional AI guidelines
+│   │
+│   └── Storage/                    # Data persistence
+│       └── {vendor_id}/            # Per-vendor storage
+│           ├── documents/          # Uploaded PDF documents
+│           └── reports/            # Generated reports
+│               └── {report_id}/    # Individual report assets
+│
+└── Resources/                      # Images, assets
+```
+
+---
+
+## Troubleshooting
+
+### "GEMINI_API_KEY is missing"
+- Ensure `.env` file exists in project root
+- Verify `GEMINI_API_KEY=` line is present and not commented out
+- Check no trailing/leading spaces in key
+
+### "Database locked" error
+- Close any other Python processes using the database
+- Ensure no other instances of the app are running
+- Try restarting the application
+
+### PDF extraction fails
+- Verify PDF files are valid/readable
+- Check file permissions
+- Check disk space in Storage/ directory
+
+### Streamlit widget not updating
+- Refresh browser page (Ctrl+R or Cmd+R)
+- Check browser console for JavaScript errors
+- Clear Streamlit cache: `streamlit cache clear`
+
+### AI evaluation returns incomplete results
+- Check that all required requirements are defined in `requirements.json`
+- Verify Gemini API quota isn't exceeded
+- Check API key has appropriate permissions
+
+---
+
+## Development
+
+Key files to understand:
+- `backend/models.py` - Data structures
+- `backend/AI_logic.py` - AI integration flow
+- `backend/database.py` - Data persistence
+- `backend/IO_engine.py` - PDF & file I/O operations
+- `backend/bitsight_client.py` - BitSight API integration
+- `frontend/app.py` - Application entry point
+- `frontend/views/view_controller.py` - View routing logic
+- `frontend/state_manager.py` - Session state management
+
+---
+
+**Last Updated: February 26, 2026**

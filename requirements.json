@@ -1,0 +1,128 @@
+{
+    "3rd Party": {
+        "name": "3rd Party",
+        "weight": 60,
+        "description": "Are 3rd Party Questionnaires and/or OEB_CSF_Governance_Templates completed and overall threat and risk analysis meet acceptable risk standards?",
+        "must_pass": false
+    },
+    "Data Type": {
+        "name": "Data Type",
+        "weight": 65,
+        "description": "Is the type of data deemed sensitive? (i.e. Customer, Employee, Financial)",
+        "must_pass": false
+    },
+    "Privacy Impact Assessment": {
+        "name": "Privacy Impact Assessment",
+        "weight": 60,
+        "description": "Has a Privacy Impact Assessment been completed?",
+        "must_pass": false
+    },
+    "Assurances/Attestation": {
+        "name": "Assurances/Attestation",
+        "weight": 60,
+        "description": "3rd Party Assurances or Attestation provided through one of the following:\nISO 27001; Proof of conformance to an Information Security Management System\nSOC 2 Type II\nPrivacy Shield\nData Privacy Addendum that confroms to a relevant privacy standard\nCSA Consensus Assessment Initiatve Questionnaire completed\nPenetration Testing\nOther?",
+        "must_pass": false
+    },
+    "Cybersecurity Requirements Spreadsheet": {
+        "name": "Cybersecurity Requirements Spreadsheet",
+        "weight": 50,
+        "description": "Has the Baseline Cybersecurity Requirements spreadsheet been completed and results show satisfactory complliance?",
+        "must_pass": false
+    },
+    "Security Awareness": {
+        "name": "Security Awareness",
+        "weight": 50,
+        "description": "Supporting documentation demonstrating cybersecurity practice provided such as Cybersecurity Policy, Privacy Policy, Incident Management Plan, etc.. or Other relevant documentation.",
+        "must_pass": false
+    },
+    "Business Continuity": {
+        "name": "Business Continuity",
+        "weight": 50,
+        "description": "Are business continuity and disaster recovery plans established and subject to testing at planned intervals?",
+        "must_pass": false
+    },
+    "Incident History": {
+        "name": "Incident History",
+        "weight": 40,
+        "description": "Have any past public cybersecurity and privacy incidents occured such as privacy breach, ransomware, other infilitration?",
+        "must_pass": false
+    },
+    "Contract Assurances": {
+        "name": "Contract Assurances",
+        "weight": 40,
+        "description": "Does the vendor use Strong Cybersecurity & Privacy Language in the Contract? Do they use our Contract template?",
+        "must_pass": false
+    },
+    "Incident Management": {
+        "name": "Incident Management",
+        "weight": 40,
+        "description": "Are Incident Management plans present and regularly tested (incident response plans)?",
+        "must_pass": false
+    },
+    "Supply Chain Security": {
+        "name": "Supply Chain Security",
+        "weight": 50,
+        "description": "Is Cybersecurity Supply Chain management present and do 3rd parties adhere to same rigor and responsibility?",
+        "must_pass": false
+    },
+    "Information Security Governance": {
+        "name": "Information Security Governance",
+        "weight": 50,
+        "description": "Are Cybersecurity controls in place and do they provide the necessary level of due diligence to protect the confidentiaility, integrity and availability of Hydro Ottawa data?",
+        "must_pass": false
+    },
+    "General Security Awareness": {
+        "name": "General Security Awareness",
+        "weight": 50,
+        "description": "Is Security Awareness training built into the organizational culture?",
+        "must_pass": false
+    },
+    "Cybersecurity Governance": {
+        "name": "Cybersecurity Governance",
+        "weight": 50,
+        "description": "Is there a Governance program present and does it incorporate Cybersecurity?",
+        "must_pass": false
+    },
+    "Personnel Security & Ethics Compliance": {
+        "name": "Personnel Security & Ethics Compliance",
+        "weight": 45,
+        "description": "Is there an employee code of conduct or ethics compliance part of organization training? Does it require attestation?",
+        "must_pass": false
+    },
+    "Bitsight Rating": {
+        "name": "Bitsight Rating",
+        "weight": 40,
+        "description": "Is the vendor's Bitsight Rating within an acceptable score? 760 out of 820 is very good, 750 is low risk, 730 is acceptable, 700 is high risk.",
+        "must_pass": false
+    },
+    "Software Development Life Cycle": {
+        "name": "Software Development Life Cycle",
+        "weight": 40,
+        "description": "Is SDLC in place and part of software development processes?",
+        "must_pass": false
+    },
+    "Insider Risk Management": {
+        "name": "Insider Risk Management",
+        "weight": 40,
+        "description": "Does an Insider Threat Program exist?",
+        "must_pass": false
+    },
+    "IT Change Control": {
+        "name": "IT Change Control",
+        "weight": 40,
+        "description": "Does a Change Management Policy exist?",
+        "must_pass": false
+    },
+    "Data Loss Prevention": {
+        "name": "Data Loss Prevention",
+        "weight": 40,
+        "description": "Does a Data loss prevention practice exist?",
+        "must_pass": false
+    },
+    "Security Breach Notification": {
+        "name": "Security Breach Notification",
+        "weight": 40,
+        "description": "Does a Breach notification process exist?",
+        "must_pass": false
+    }
+}
