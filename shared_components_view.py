@@ -8,20 +8,22 @@ from pathlib import Path
 import streamlit as st
 
 from backend.models import Report, Vendor
+from backend.permissions import Permission
 from backend.IO_engine import generate_pdf_report
 from backend.report_utils import calculate_score
 from backend.config_manager import get_threshold_settings
-from backend.vendor_database import get_vendor_documents_path, delete_vendor, set_vendor_nda_signed
+from backend.vendor_database import get_vendor_documents_path, delete_vendor, get_vendor_model_by_id, set_vendor_nda_signed
 
 from frontend.state_manager import handle_vendor_switch, reset_states
 from frontend.utils import get_badge_styles
+from frontend.auth_helpers import current_user_has_permission
 
 
 def render_documents(doc_width: float, del_width: float) -> None:
     """Render source document list, deletion controls, and analysis trigger button."""
 
-    # Only admins can view/manage documents
-    if not st.session_state.get("is_admin", False):
+    # Only users with create-report privileges can view/manage source documents.
+    if not current_user_has_permission(Permission.VIEW_DOCUMENTS):
         return
 
     vendor_id = st.session_state.get("active_vendor_id")
@@ -29,16 +31,18 @@ def render_documents(doc_width: float, del_width: float) -> None:
     if not vendor_id:
         return
     
-    # Validate vendor still exists
-    from backend.vendor_database import get_vendor_model_by_id
     vendor = get_vendor_model_by_id(vendor_id)
+
+    # Validate vendor still exists
     if vendor is None:
         st.error("⚠️ This vendor no longer exists. It may have been deleted.")
         return
-
-    nda_signed = vendor.nda_signed
         
-    st.subheader("📄 Source Documents", anchor=False)
+    st.subheader("📄 Source Documents")
+
+    if not current_user_has_permission(Permission.VIEW_NDA_DOCUMENTS) and vendor.nda_signed:
+        st.caption("🔒 NDA is signed for this vendor. Document view is disabled to prevent accidental disclosure.")
+        return
 
     # Get vendor documents path
     documents_path = get_vendor_documents_path(vendor_id)
@@ -73,39 +77,28 @@ def render_documents(doc_width: float, del_width: float) -> None:
         
         if file_path.exists():
             with btn_col:
-                if nda_signed:
-                    st.markdown(f"📄 {name}")
-                else:
-                    with open(file_path, "rb") as f:
-                        # Download button acts as an "Open" trigger for PDFs
-                        st.download_button(
-                            label=f"{name}",
-                            data=f,
-                            file_name=name,
-                            mime="application/pdf",
-                            width='stretch',
-                            key=f"dl_{name}_{vendor_id}"
-                        )
+                with open(file_path, "rb") as f:
+                    # Download button acts as an "Open" trigger for PDFs
+                    st.download_button(
+                        label=f"{name}",
+                        data=f,
+                        file_name=name,
+                        mime="application/pdf",
+                        width='stretch',
+                        key=f"dl_{name}_{vendor_id}",
+                        disabled=not current_user_has_permission(Permission.DOWNLOAD_DOCUMENTS),
+                    )
 
             with del_col:
-                # Use a small button for deletion of files
-                if st.button("🗑️", key=f"del_{name}_{vendor_id}", help=f"Delete {name}"):
+                
+                if st.button("🗑️", key=f"del_{name}_{vendor_id}", help=f"Delete {name}", disabled=not current_user_has_permission(Permission.DELETE_DOCUMENTS)):
                     # Delete the file from disk
                     file_path.unlink()
                     st.rerun()
 
-    if nda_signed and document_files:
-        st.caption("🔒 NDA is signed for this vendor. Source document downloads are disabled to prevent accidental disclosure.")
-
-    st.divider()
-
 
 def render_generate_report_button() -> None:
     """Render the 'Generate Report' button to trigger AI analysis of uploaded documents."""
-
-    # Only admins can generate reports
-    if not st.session_state.get("is_admin", False):
-        return
     
     # Show if the vendor has files
     vendor_id = st.session_state.get("active_vendor_id")
@@ -122,10 +115,9 @@ def render_generate_report_button() -> None:
     if not document_files:
         return
     
-    if st.button("🚀 Generate Report", type="primary", width='stretch'):
+    if st.button("🚀 Generate Report", type="primary", width='stretch', disabled=not current_user_has_permission(Permission.CREATE_REPORTS)):
         st.session_state.analysis_in_progress = True
         st.rerun()
-
 
 def render_pdf_downloader() -> None:
     """Render controls to generate and download a PDF summary for the active report."""
@@ -142,7 +134,7 @@ def render_pdf_downloader() -> None:
     if vendor_id and "active_report" in st.session_state:
         report = st.session_state.active_report
 
-        st.subheader("📥 Download Report", anchor=False)
+        st.subheader("📥 Download Report")
 
         if not report:
             st.info("Select a report to enable PDF download.")
@@ -154,7 +146,7 @@ def render_pdf_downloader() -> None:
             st.session_state.live_pdf_data = None
 
         # Button updates the data whenever you want a fresh version
-        if st.button("🔄 Sync & Prepare PDF", width='stretch', key="sync_pdf_btn"):
+        if st.button("🔄 Sync & Prepare PDF", width='stretch', key="sync_pdf_btn", disabled=not current_user_has_permission(Permission.DOWNLOAD_REPORTS)):
             with st.spinner("Updating report data..."):
                 # This is where we update the data value "on the fly"
                 st.session_state.live_pdf_data = generate_pdf_report()
@@ -171,7 +163,8 @@ def render_pdf_downloader() -> None:
                     file_name=f"Audit_{report.vendor_name}.pdf",
                     mime="application/pdf",
                     width='stretch',
-                    type="primary"
+                    type="primary",
+                    disabled=not current_user_has_permission(Permission.DOWNLOAD_REPORTS),
                 )
     
         st.divider()
@@ -266,14 +259,14 @@ def render_oneline_security_score(report: Report) -> None:
             )
 
 
-def vertical_divider(height: str = "20vh") -> None:
+def render_vertical_divider(height: str = "20vh") -> None:
     """Render a vertical divider of specified height.
 
     Args:
         height (str, optional): CSS height value for the divider. Defaults to "20px".
     """
     st.markdown(
-        f'<div class="app-shell-divider" style="height: {height};"></div>',
+        f'<div style="border-left: 2px solid #31333F; height: {height}; display: block; margin: 0 10px;"></div>',
         unsafe_allow_html=True
     )
 
@@ -287,47 +280,46 @@ def render_delete_vendor_button(vendor: Vendor | None = None) -> None:
         vendor (Vendor, optional): Vendor model containing id and name.
                                 If None, uses active_vendor_id from session state.
     """
-    if not st.session_state.get("is_admin", False):
-        return
 
     if vendor is None:
         return
     
-    # Use a unique confirmation phase key per vendor
+    # Use vendor-scoped keys so confirmation state does not leak between
+    # different vendor cards/pages during Streamlit reruns.
     vendor_id = vendor.id
     confirm_key = f"delete_confirm_phase_{vendor_id}"
     confirm_page_key = f"delete_confirm_page_{vendor_id}"
     current_page = st.session_state.get("current_page")
 
-    # Reset confirmation if the user navigated away
+    # Cancel any pending confirmation if user navigates away from the page where delete was initiated.
     if st.session_state.get(confirm_key, False):
         if st.session_state.get(confirm_page_key) != current_page:
             st.session_state[confirm_key] = False
             st.session_state.pop(confirm_page_key, None)
     
-    # If we aren't confirming, show the initial delete button
+    # Phase 1: arm confirmation.
     if not st.session_state.get(confirm_key, False):
-        if st.button("🗑️ Delete This Vendor", type="primary", key=f"delete_btn_{vendor_id}", width='stretch'):
+        if st.button("🗑️ Delete This Vendor", type="primary", key=f"delete_btn_{vendor_id}", width='stretch', disabled=not current_user_has_permission(Permission.DELETE_VENDORS)):
             st.session_state[confirm_key] = True
             st.session_state[confirm_page_key] = current_page
             st.rerun()  # Force rerun to show the confirmation UI
                 
-    # If we ARE confirming, show the "Are you sure?" UI
+    # Phase 2: explicit confirm/cancel actions.
     else:
         st.warning("⚠️ This action cannot be undone. Are you sure?")
                     
         c1, c2 = st.columns(2)
                     
         with c1:
-            if st.button("❌ No", key=f"cancel_delete_{vendor_id}", width='stretch'):
-                # Reset the phase if they change their mind
+            if st.button("❌ No", key=f"cancel_delete_{vendor_id}", width='stretch', disabled=not current_user_has_permission(Permission.DELETE_VENDORS)):
+                # Return to Phase 1 if user cancels.
                 st.session_state[confirm_key] = False
                 st.session_state.pop(confirm_page_key, None)
                 st.rerun()
 
         with c2:
-            if st.button("✅ Yes", type="primary", key=f"confirm_delete_{vendor_id}", width='stretch'):
-                # Execute deletion logic
+            if st.button("✅ Yes", type="primary", key=f"confirm_delete_{vendor_id}", width='stretch', disabled=not current_user_has_permission(Permission.DELETE_VENDORS)):
+                # Confirmed delete: clear local state and remove vendor/report data.
                     
                 delete_vendor(vendor_id)
                     
@@ -351,7 +343,8 @@ def render_nda_toggle_button(vendor: Vendor | None = None) -> None:
     Args:
         vendor (Vendor | None): Vendor model. If None, no button is rendered.
     """
-    if not st.session_state.get("is_admin", False):
+    # Only users with toggle-nda permission can toggle NDA status.
+    if not current_user_has_permission(Permission.TOGGLE_NDA):
         return
 
     if vendor is None or vendor.id is None:
@@ -359,10 +352,10 @@ def render_nda_toggle_button(vendor: Vendor | None = None) -> None:
 
     if vendor.nda_signed:
         button_label = "🔓 Mark NDA Unsigned"
-        button_help = "Allow source document downloads for this vendor"
+        button_help = "Record that an NDA has not been signed with this vendor."
     else:
         button_label = "🔒 Mark NDA Signed"
-        button_help = "Disable source document downloads for this vendor"
+        button_help = "Record that an NDA has been signed with this vendor."
 
     if st.button(button_label, type="secondary", width='stretch', key=f"nda_toggle_{vendor.id}", help=button_help):
         set_vendor_nda_signed(vendor.id, not vendor.nda_signed)

@@ -2,19 +2,35 @@ import streamlit as st
 
 from backend.vendor_database import init_db as init_vendor_db
 from backend.user_database import init_user_db
+from backend.permissions import Permission
+from backend.models import UserRole
+
+from frontend.views.areas.left_sidebar_view import render_left_sidebar
+from frontend.views.areas.main_col_view import render_main_col
+from frontend.views.areas.right_sidebar_view import render_right_sidebar
+
 from frontend.views.ai_settings_view import render_ai_settings_page
+from frontend.views.client_side_view.client_upload_view import render_client_upload_page
 from frontend.views.login_view import render_login_page
-from frontend.state_manager import init_session_state
-from frontend.views.left_sidebar_view import render_left_sidebar
-from frontend.views.main_col_view import render_main_col
-from frontend.views.right_sidebar_view import render_right_sidebar
-from frontend.views.shared_components_view import vertical_divider
-from frontend.utils import run_analysis
-from frontend.styles import get_styles
+from frontend.views.shared_components_view import render_vertical_divider
 from frontend.views.vendors_page_view import render_vendors_page
+
+from frontend.utils import run_analysis, get_pdf_passwords_from_ui
+from frontend.styles import get_styles
+from frontend.state_manager import init_session_state
+from frontend.auth_helpers import current_user_has_permission, current_user_is
 
 def render_web_app() -> None:
     """Render the entire web app, including sidebars and main content."""
+
+    # Hide anchors over all elements
+    st.markdown("""
+    <style>
+    [data-testid="stHeaderActionElements"] {
+        display: none;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # Page Config
     st.set_page_config(
@@ -33,20 +49,37 @@ def render_web_app() -> None:
     if not st.session_state.get("logged_in", False):
         render_login_page()
         return
+    
+    if current_user_is(UserRole.CLIENT):
+        render_client_upload_page()
+        return
 
     # Native Left Sidebar (Navigation)
     with st.sidebar:
         render_left_sidebar()
 
-    # Check if analysis is in progress - if so, show loading screen instead of normal UI
+    # Check if analysis is in progress - if so, check for locked PDFs and prompt for passwords
     if st.session_state.get("analysis_in_progress", False):
 
-        st.markdown(get_styles("analysis_loading"), unsafe_allow_html=True)
+        # Check if we've already prompted for passwords and are ready to generate
+        if not st.session_state.get("ready_to_generate", False):
+            # Show password prompt if there are locked PDFs
+            get_pdf_passwords_from_ui()
+        else:
+            # Passwords have been provided, proceed with analysis
+            st.markdown(get_styles("analysis_loading"), unsafe_allow_html=True)
 
-        with st.spinner("🔄 Analyzing documents and generating report... This may take a minute."):
-            run_analysis()
-        
-        st.stop()
+            with st.spinner("🔄 Analyzing documents and generating report... This may take a minute."):
+                run_analysis()
+            
+            st.stop()
+
+    # Scoped-vendor users are restricted from admin surfaces (Vendors/Settings).
+    # If they navigate there via stale state/URL, force-reset to Dashboard.
+    if current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS) and st.session_state.current_page in {"Vendors", "Settings"}:
+        st.session_state.current_page = "Dashboard"
+        st.session_state.current_tab  = "Dashboard"
+        st.rerun()
 
     # Render settings page if selected
     if st.session_state.current_page == "Settings":
@@ -68,7 +101,7 @@ def render_web_app() -> None:
 
             # Vertical divider between the main content and right sidebar
             with col_spacer:
-                vertical_divider("100vh")
+                render_vertical_divider("100vh")
 
             with right_info:
                 render_right_sidebar()

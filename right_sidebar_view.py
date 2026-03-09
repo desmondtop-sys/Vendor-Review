@@ -1,10 +1,12 @@
 import streamlit as st
 
 from backend.vendor_database import create_vendor, get_vendor_documents_path
+from backend.permissions import Permission
 
 from frontend.styles import get_styles
 from frontend.state_manager import reset_states, reset_sandbox
 from frontend.views.shared_components_view import render_documents, render_generate_report_button, render_pdf_downloader
+from frontend.auth_helpers import current_user_has_permission
 
 
 def render_right_sidebar() -> None:
@@ -17,9 +19,13 @@ def render_right_sidebar() -> None:
     if st.session_state.current_tab == "Assets":
         return
 
+    st.divider()
+
     render_documents(0.8, 0.2)
 
     render_generate_report_button()
+
+    st.divider()
 
     render_pdf_downloader()
 
@@ -27,16 +33,13 @@ def render_right_sidebar() -> None:
 def render_uploader() -> None:
     """Render document uploader and persist uploaded files to the vendor's documents folder."""
 
-    # Only admins can upload documents
-    if not st.session_state.get("is_admin", False):
-        return
-
-    st.subheader("📤 Upload Documents", anchor=False)
+    st.subheader("📤 Upload Documents")
     uploaded_files = st.file_uploader(
         "Add PDFs and Spreadsheets to this evaluation", 
         type=["pdf", "xlsx", "xls", "csv"], 
         accept_multiple_files=True, 
-        key=f"uploader_{st.session_state.uploader_id}"
+        key=f"uploader_{st.session_state.uploader_id}",
+        disabled=not current_user_has_permission(Permission.UPLOAD_DOCUMENTS),
     )
 
     if uploaded_files:
@@ -60,5 +63,3 @@ def render_uploader() -> None:
         reset_states()
         reset_sandbox()
         st.rerun()
-        
-    st.divider()

@@ -39,8 +39,10 @@ def init_session_state() -> None:
         st.session_state.user_email = None
     if "user_full_name" not in st.session_state:
         st.session_state.user_full_name = None
-    if "is_admin" not in st.session_state:
-        st.session_state.is_admin = False
+    if "user_role" not in st.session_state:
+        st.session_state.user_role = None
+    if "user_assigned_vendor_id" not in st.session_state:
+        st.session_state.user_assigned_vendor_id = None
     
     # Application state
     if "uploader_id" not in st.session_state: 
@@ -53,6 +55,16 @@ def init_session_state() -> None:
         st.session_state.active_vendor_id = None
     if "active_report" not in st.session_state:
         st.session_state.active_report = None
+    
+    # PDF password and analysis state
+    if "pdf_passwords" not in st.session_state:
+        st.session_state.pdf_passwords = {}
+    if "pending_passwords_to_save" not in st.session_state:
+        st.session_state.pending_passwords_to_save = {}
+    if "ready_to_generate" not in st.session_state:
+        st.session_state.ready_to_generate = False
+    if "analysis_in_progress" not in st.session_state:
+        st.session_state.analysis_in_progress = False
 
 def handle_vendor_switch(vendor_id: int) -> None:
     """Switch active vendor and load its saved active report, or latest if none saved.
@@ -62,7 +74,10 @@ def handle_vendor_switch(vendor_id: int) -> None:
     """
     st.session_state.active_vendor_id = vendor_id
     
-    # Try to load the saved active report for this vendor
+    # Report selection priority for a vendor switch:
+    # 1) previously saved active report id (if still present)
+    # 2) latest report in DB as fallback
+    # 3) None when vendor has no reports
     saved_report_id = get_active_report_for_vendor(vendor_id)
     
     if saved_report_id:
@@ -71,7 +86,7 @@ def handle_vendor_switch(vendor_id: int) -> None:
         if saved_report_row:
             st.session_state.active_report = generate_vendor_report_from_db(saved_report_row)
         else:
-            # Saved report doesn't exist anymore, load latest instead
+            # Saved pointer may be stale (report deleted), so recover gracefully.
             latest_report_row = get_latest_report_for_vendor(vendor_id)
             if latest_report_row:
                 st.session_state.active_report = generate_vendor_report_from_db(latest_report_row)

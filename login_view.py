@@ -2,6 +2,7 @@
 
 import streamlit as st
 from backend.user_database import authenticate_user
+from backend.permissions import has_permission, Permission
 from backend.config_manager import get_ai_instructions, get_ai_requirements, get_threshold_settings
 from frontend.styles import get_styles
 
@@ -18,7 +19,7 @@ def render_login_page() -> None:
     with col2:
         st.markdown('<div class="login-header">', unsafe_allow_html=True)
         st.title("🔐 Vendor Evaluator")
-        st.subheader("Sign In", anchor=False)
+        st.subheader("Sign In")
         st.markdown('</div>', unsafe_allow_html=True)
         
         # Login form
@@ -46,13 +47,19 @@ def render_login_page() -> None:
                     user = authenticate_user(username, password)
                     
                     if user:
+                        # Access gates are evaluated in order:
+                        # 1) account active, 2) scoped users must be linked to a vendor,
+                        # 3) on success hydrate session + cached settings.
                         if not user.is_active:
                             st.error("⚠️ Your account has been deactivated...")
+                        elif has_permission(user.role, Permission.SCOPED_VENDOR_ACCESS) and user.assigned_vendor_id is None:
+                            st.error("⚠️ Your client account is not linked to a vendor yet. Please contact an administrator.")
                         else:
                             st.session_state.logged_in = True
                             st.session_state.user_id = user.id
                             st.session_state.username = user.username
                             st.session_state.user_role = user.role  # Store enum
+                            st.session_state.user_assigned_vendor_id = user.assigned_vendor_id
                             st.session_state.user_email = user.email
                             st.session_state.user_full_name = user.full_name
                             
@@ -85,7 +92,8 @@ def logout() -> None:
     st.session_state.username = None
     st.session_state.user_email = None
     st.session_state.user_full_name = None
-    st.session_state.is_admin = False
+    st.session_state.user_role = None
+    st.session_state.user_assigned_vendor_id = None
     
     # Clear cached settings snapshot
     st.session_state.cached_ai_instructions = None

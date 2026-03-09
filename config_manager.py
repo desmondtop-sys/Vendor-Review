@@ -127,3 +127,15 @@ def set_threshold_settings(pass_val, fail_val):
         return True, "Thresholds saved."
     except Exception as e:
         return False, f"Error saving thresholds: {str(e)}"
+
+def get_client_documents() -> dict:
+    """Load and return client document requirements from JSON configuration.
+
+    Returns:
+        dict: Parsed JSON object from "config/client_documents.json" containing
+        document types with their descriptions and required status.
+    """
+    with open(BACKEND_DIR / "config/client_documents.json", "r") as f:
+        documents = json.load(f)
+    
+    return documents

@@ -1,14 +1,13 @@
 import streamlit as st
 
+from backend.permissions import Permission
 from backend.bitsight_client import get_company_rating_by_name
 from backend.vendor_database import get_vendor_model_by_id, update_vendor_bitsight
 
+from frontend.auth_helpers import current_user_has_permission
+from frontend.auth_helpers import current_user_has_permission
 from frontend.styles import get_styles
-from frontend.views.shared_components_view import (
-    render_documents,
-    render_generate_report_button,
-    render_pdf_downloader,
-)
+from frontend.views.shared_components_view import render_documents, render_generate_report_button, render_pdf_downloader
 
 
 def render_assets_page() -> None:
@@ -16,7 +15,8 @@ def render_assets_page() -> None:
 
     st.markdown(get_styles("assets"), unsafe_allow_html=True)
 
-    render_bitsight_information()
+    # Bitsight API doesn't work yet. Commenting out for now
+    # render_bitsight_information()
 
     render_documents(0.95, 0.05)
 
@@ -39,7 +39,7 @@ def render_bitsight_information() -> None:
     col1, col2 = st.columns([0.8, 0.2])
 
     with col1:
-        st.subheader("Bitsight", anchor=False)
+        st.subheader("Bitsight")
 
         current_score = vendor.bitsight_rating
         rating_date = vendor.bitsight_rating_date
@@ -51,7 +51,7 @@ def render_bitsight_information() -> None:
 
     with col2:
         # Reset button
-        if st.button("Reset Bitsight Information", type="secondary", help="Clear all Bitsight data from database"):
+        if st.button("Reset Bitsight Information", type="secondary", help="Clear all Bitsight data from database", disabled=not current_user_has_permission(Permission.MANAGE_BITSIGHT)):
             update_vendor_bitsight(
                 vendor_id,
                 company_guid=None,
@@ -74,12 +74,14 @@ def render_bitsight_information() -> None:
         render_bitsight_score()
 
     score_value = int(current_score) if current_score is not None else 0
+
     new_score = st.number_input(
         "Bitsight Score",
         min_value=0,
         max_value=1000,
         value=score_value,
         step=1,
+        disabled=not current_user_has_permission(Permission.MANAGE_BITSIGHT),
     )
 
     save_col, fetch_col = st.columns(2, gap="medium")
@@ -87,7 +89,7 @@ def render_bitsight_information() -> None:
     with save_col:
         button_type = "tertiary" if new_score != score_value else "secondary"
 
-        if st.button("Save Manual Score", type=button_type, width='stretch'):
+        if st.button("Save Manual Score", type=button_type, width='stretch', disabled=not current_user_has_permission(Permission.MANAGE_BITSIGHT)):
             update_vendor_bitsight(
                 vendor_id,
                 company_guid=vendor.bitsight_company_guid,
@@ -99,7 +101,7 @@ def render_bitsight_information() -> None:
             st.rerun()
 
     with fetch_col:
-        if st.button("Fetch from Bitsight API", type="primary", width='stretch'):
+        if st.button("Fetch from Bitsight API (Currently Broken - Enter Manually)", type="primary", width='stretch', disabled=not current_user_has_permission(Permission.MANAGE_BITSIGHT)):
             with st.spinner("Fetching Bitsight rating..."):
                 bitsight_data = get_company_rating_by_name(vendor.name)
             if bitsight_data:
@@ -131,7 +133,7 @@ def render_bitsight_information() -> None:
 
 
 def render_bitsight_score() -> None:
-    """Render the Bitsight score badge on the report view."""
+    """Render the Bitsight score badge on the report view."""\
 
     vendor_id = st.session_state.get("active_vendor_id")
     if not vendor_id:

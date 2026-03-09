@@ -118,6 +118,7 @@ def init_user_db() -> None:
         password_hash TEXT NOT NULL,
         full_name TEXT,
         role TEXT NOT NULL DEFAULT 'viewer',
+        assigned_vendor_id INTEGER,
         is_active BOOLEAN DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_login DATETIME,
@@ -125,19 +126,7 @@ def init_user_db() -> None:
         token_expiry DATETIME
     )
     """)
-    
-    # Migration: if is_admin column exists, convert to role field
-    cursor.execute("PRAGMA table_info(users)")
-    columns = [col[1] for col in cursor.fetchall()]
-    if "is_admin" in columns:
-        cursor.execute("""
-            ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'viewer'
-        """)
-        cursor.execute("""
-            UPDATE users SET role = 'admin' WHERE is_admin = 1
-        """)
-        # Note: can't drop is_admin in SQLite, but it's now redundant
-    
+
     conn.commit()
     conn.close()
 
@@ -169,7 +158,14 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
 
 
-def create_user(username: str, email: str, password: str, full_name: str = None, is_admin: bool = False) -> int | None:
+def create_user(
+    username: str,
+    email: str,
+    password: str,
+    full_name: str = None,
+    role: str = "viewer",
+    assigned_vendor_id: int | None = None,
+) -> int | None:
     """Create a new user account.
 
     Args:
@@ -177,22 +173,46 @@ def create_user(username: str, email: str, password: str, full_name: str = None,
         email (str): Unique email address.
         password (str): Plain text password (will be hashed).
         full_name (str): User's full name (optional).
-        is_admin (bool): Whether user has admin privileges.
+        role (str): User role - "admin", "analyst", "client", or "viewer" (default: "viewer").
+        assigned_vendor_id (int | None): Vendor ID the user is restricted to (client users).
 
     Returns:
         int | None: Newly created user ID, or None if creation failed.
     """
+    from backend.models import UserRole
+    
+    # Validate role
+    valid_roles = [r.value for r in UserRole]
+    if role not in valid_roles:
+        print(f"❌ Invalid role: {role}. Must be one of: {', '.join(valid_roles)}")
+        return None
+
+    # client users must have a valid assigned vendor
+    if role == UserRole.CLIENT.value:
+        if assigned_vendor_id is None:
+            print("❌ client users must have an assigned_vendor_id")
+            return None
+
+        from backend.vendor_database import get_vendor_model_by_id
+        if get_vendor_model_by_id(assigned_vendor_id) is None:
+            print(f"❌ Vendor with id={assigned_vendor_id} does not exist")
+            return None
+    else:
+        assigned_vendor_id = None
+    
     password_hash = hash_password(password)
     
     try:
         user_id = _execute_update(
             """
-            INSERT INTO users (username, email, password_hash, full_name, is_admin)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO users (username, email, password_hash, full_name, role, assigned_vendor_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (username, email, password_hash, full_name, is_admin)
+            (username, email, password_hash, full_name, role, assigned_vendor_id)
         )
-        print(f"✅ User created: {username} (ID: {user_id})")
+        print(
+            f"✅ User created: {username} (ID: {user_id}, Role: {role}, Assigned Vendor: {assigned_vendor_id})"
+        )
         return user_id
     except sqlite3.IntegrityError:
         print(f"❌ User creation failed: Username or email already exists")
@@ -201,14 +221,14 @@ def create_user(username: str, email: str, password: str, full_name: str = None,
 
 def authenticate_user(username: str, password: str) -> User | None:
     """Authenticate a user and return typed User object."""
-    query = """SELECT id, username, email, full_name, role, is_active, created_at, last_login 
+    query = """SELECT id, username, email, full_name, role, assigned_vendor_id, is_active, created_at, last_login, password_hash 
                FROM users WHERE username = ?"""
     row = _execute_select_one(query, (username,), use_row_factory=True)
     
     if not row:
         return None
     
-    password_hash = row['password_hash']  # Get hash in separate query
+    password_hash = row['password_hash']
     if not verify_password(password, password_hash):
         return None
     
@@ -219,6 +239,7 @@ def authenticate_user(username: str, password: str) -> User | None:
         email=row['email'],
         full_name=row['full_name'],
         role=UserRole(row['role']),  # Convert string to enum
+        assigned_vendor_id=row['assigned_vendor_id'],
         is_active=row['is_active'],
         created_at=row['created_at'],
         last_login=row['last_login'],
@@ -241,22 +262,6 @@ def get_user_by_id(user_id: int) -> sqlite3.Row | None:
     )
 
 
-def get_user_by_username(username: str) -> sqlite3.Row | None:
-    """Fetch a user by their username.
-
-    Args:
-        username (str): Username to search for.
-
-    Returns:
-        sqlite3.Row | None: User row, or None if not found.
-    """
-    return _execute_select_one(
-        "SELECT * FROM users WHERE username = ?",
-        (username,),
-        use_row_factory=True
-    )
-
-
 def get_user_by_email(email: str) -> sqlite3.Row | None:
     """Fetch a user by their email address.
 
@@ -273,185 +278,21 @@ def get_user_by_email(email: str) -> sqlite3.Row | None:
     )
 
 
-def get_all_users() -> list[sqlite3.Row]:
-    """Fetch all users ordered by creation date (newest first).
-
-    Returns:
-        list[sqlite3.Row]: Collection of user rows.
-    """
-    return _execute_select(
-        "SELECT * FROM users ORDER BY created_at DESC",
-        use_row_factory=True
-    )
-
-
-def update_user(user_id: int, username: str = None, email: str = None, full_name: str = None) -> bool:
-    """Update user information.
+def get_user_display_name(user_id: int) -> str:
+    """Get the display name for a user.
 
     Args:
         user_id (int): User identifier.
-        username (str): New username (optional).
-        email (str): New email (optional).
-        full_name (str): New full name (optional).
 
     Returns:
-        bool: True if update successful, False otherwise.
+        str: User's full name if available, otherwise username, or "Unknown User" if not found.
     """
-    # Build dynamic update query based on provided fields
-    updates = []
-    params = []
-    
-    if username is not None:
-        updates.append("username = ?")
-        params.append(username)
-    if email is not None:
-        updates.append("email = ?")
-        params.append(email)
-    if full_name is not None:
-        updates.append("full_name = ?")
-        params.append(full_name)
-    
-    if not updates:
-        return False
-    
-    params.append(user_id)
-    query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
-    
-    try:
-        _execute_update(query, tuple(params))
-        return True
-    except sqlite3.IntegrityError:
-        print(f"❌ Update failed: Username or email already exists")
-        return False
-
-
-def update_password(user_id: int, new_password: str) -> bool:
-    """Update a user's password.
-
-    Args:
-        user_id (int): User identifier.
-        new_password (str): New plain text password (will be hashed).
-
-    Returns:
-        bool: True if update successful, False otherwise.
-    """
-    password_hash = hash_password(new_password)
-    rows_affected = _execute_update(
-        "UPDATE users SET password_hash = ?, password_reset_token = NULL, token_expiry = NULL WHERE id = ?",
-        (password_hash, user_id)
-    )
-    return rows_affected > 0
-
-
-def set_user_active_status(user_id: int, is_active: bool) -> bool:
-    """Activate or deactivate a user account.
-
-    Args:
-        user_id (int): User identifier.
-        is_active (bool): Whether user should be active.
-
-    Returns:
-        bool: True if update successful, False otherwise.
-    """
-    rows_affected = _execute_update(
-        "UPDATE users SET is_active = ? WHERE id = ?",
-        (is_active, user_id)
-    )
-    return rows_affected > 0
-
-
-def set_user_admin_status(user_id: int, is_admin: bool) -> bool:
-    """Grant or revoke admin privileges for a user.
-
-    Args:
-        user_id (int): User identifier.
-        is_admin (bool): Whether user should be an admin.
-
-    Returns:
-        bool: True if update successful, False otherwise.
-    """
-    rows_affected = _execute_update(
-        "UPDATE users SET is_admin = ? WHERE id = ?",
-        (is_admin, user_id)
-    )
-    return rows_affected > 0
-
-
-def create_password_reset_token(email: str, expiry_hours: int = 24) -> str | None:
-    """Create a password reset token for a user.
-
-    Args:
-        email (str): User's email address.
-        expiry_hours (int): Hours until token expires (default: 24).
-
-    Returns:
-        str | None: Reset token if successful, None if user not found.
-    """
-    user = get_user_by_email(email)
+    user = get_user_by_id(user_id)
     if not user:
-        return None
+        return "Unknown User"
     
-    # Generate a secure random token
-    token = secrets.token_urlsafe(32)
-    expiry = datetime.now() + timedelta(hours=expiry_hours)
-    
-    _execute_update(
-        "UPDATE users SET password_reset_token = ?, token_expiry = ? WHERE id = ?",
-        (token, expiry.isoformat(), user['id'])
-    )
-    
-    return token
-
-
-def validate_password_reset_token(token: str) -> sqlite3.Row | None:
-    """Validate a password reset token and return the user if valid.
-
-    Args:
-        token (str): Password reset token to validate.
-
-    Returns:
-        sqlite3.Row | None: User row if token is valid, None otherwise.
-    """
-    user = _execute_select_one(
-        "SELECT * FROM users WHERE password_reset_token = ?",
-        (token,),
-        use_row_factory=True
-    )
-    
-    if not user or not user['token_expiry']:
-        return None
-    
-    # Check if token has expired
-    expiry = datetime.fromisoformat(user['token_expiry'])
-    if datetime.now() > expiry:
-        # Token expired, clear it
-        _execute_update(
-            "UPDATE users SET password_reset_token = NULL, token_expiry = NULL WHERE id = ?",
-            (user['id'],)
-        )
-        return None
-    
-    return user
-
-
-def delete_user(user_id: int) -> bool:
-    """Delete a user account.
-
-    Args:
-        user_id (int): User identifier to delete.
-
-    Returns:
-        bool: True if deletion successful, False otherwise.
-    """
-    rows_affected = _execute_update(
-        "DELETE FROM users WHERE id = ?",
-        (user_id,)
-    )
-    
-    if rows_affected > 0:
-        print(f"🗑️ Deleted user ID: {user_id}")
-        return True
-    return False
+    # Prefer full_name if available, otherwise use username
+    return user['full_name'] if user['full_name'] else user['username']
 
 
 def print_users_table() -> None:
@@ -478,8 +319,9 @@ def print_users_table() -> None:
             print(f"Username: {row['username']}")
             print(f"Email: {row['email']}")
             print(f"Full Name: {row['full_name'] or 'N/A'}")
+            print(f"Role: {row['role']}")
+            print(f"Assigned Vendor ID: {row['assigned_vendor_id'] if row['assigned_vendor_id'] is not None else 'N/A'}")
             print(f"Active: {'Yes' if row['is_active'] else 'No'}")
-            print(f"Admin: {'Yes' if row['is_admin'] else 'No'}")
             print(f"Created: {row['created_at']}")
             print(f"Last Login: {row['last_login'] or 'Never'}")
             print("-" * 120)
@@ -490,31 +332,12 @@ def print_users_table() -> None:
         conn.close()
 
 
-def cleanup_user_database() -> None:
-    """Remove all user rows from the database."""
-
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute("DELETE FROM users")
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name='users'")
-        conn.commit()
-
-        print("🧹 User database wiped clean!")
-
-    except sqlite3.Error as e:
-        print(f"❌ Error during cleanup: {e}")
-    finally:
-        conn.close()
-
-
 if __name__ == "__main__":
     # Initialize the database
     init_user_db()
     
     # Example: Create a test user
-    # create_user("admin", "admin@example.com", "admin123", "Administrator", is_admin=True)
+    # create_user("admin", "admin@example.com", "admin123", "Administrator", role="admin")
     
     # Print all users
     print_users_table()

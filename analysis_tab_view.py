@@ -1,14 +1,16 @@
 import streamlit as st
 
 from backend.models import SecurityControl
+from backend.permissions import Permission
 
 from backend.charts import generate_report_pie_chart
 from backend.report_utils import get_control_by_name
 
 from frontend.styles import get_styles
-from frontend.views.shared_components_view import render_security_score, vertical_divider
+from frontend.views.shared_components_view import render_security_score, render_vertical_divider
 from frontend.utils import get_current_view_report, save_simulation_as_new_report
 from frontend.state_manager import initialize_simulation, reset_sandbox, sync_sim_control, sync_sim_status
+from frontend.auth_helpers import current_user_has_permission
 
 def render_analysis_tools() -> None:
     """Render the analysis tools panel, chart, score, and simulation controls."""
@@ -26,7 +28,7 @@ def render_analysis_tools() -> None:
             st.plotly_chart(generate_report_pie_chart(current_view_report), width='stretch')
 
         with divider_col:
-            vertical_divider("45vh")
+            render_vertical_divider("45vh")
     
         with save_sim_col:
             with st.container():
@@ -45,7 +47,7 @@ def render_sim_header() -> None:
 
     col_title, col_security_score = st.columns([0.65, 0.35])
     with col_title:
-        st.subheader("🏖️ Security Impact Sandbox", anchor=False)
+        st.subheader("🏖️ Security Impact Sandbox")
         st.caption("Simulate different outcomes to see how they affect the final score.")
         st.caption("These parameters are reset upon reload.")
     with col_security_score:
@@ -103,6 +105,7 @@ def render_requirements() -> None:
             
             with col_info:
                 # Displays Name + Original Weight
+                # Pull original control from active report so users can compare sandbox edits against baseline values.
                 original_control = get_control_by_name(st.session_state.active_report, control.name)
                 # Safety: If control not found (e.g., after report switch), use simulation weight
                 original_weight = original_control.weight if original_control else control.weight
@@ -118,6 +121,8 @@ def render_requirements() -> None:
             
             # Create sliders to simulate changes to the weights
             with col_slider:
+
+                # Versioned key forces Streamlit to rebuild slider state when simulation context changes.
                 slider_key = f"sim_v{version}_{control.name}_{sim_report.id}"
 
                 st.slider(
@@ -143,10 +148,6 @@ def render_requirements() -> None:
 def render_save_simulation_panel() -> None:
     """Render the save-simulation panel for the analysis tools page."""
 
-    # Gatekeep for non-admins
-    if not st.session_state.get("is_admin", False):
-        return
-
     st.markdown(
         """
         <div style="background-color: #E8F2FF; border-radius: 10px; padding: 18px;">
@@ -161,7 +162,7 @@ def render_save_simulation_panel() -> None:
         unsafe_allow_html=True
     )
 
-    if st.button("Save Simulation as New Report", type="primary", width='stretch'):
+    if st.button("Save Simulation as New Report", type="primary", width='stretch', disabled=not current_user_has_permission(Permission.CREATE_REPORTS)):
         save_simulation_as_new_report()
 
 

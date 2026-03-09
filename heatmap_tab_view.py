@@ -17,7 +17,7 @@ def render_heatmap_tab_view():
         st.info("No vendors found. Create a vendor to get started!")
         return
     
-    st.header("Vendor Control Heatmap", anchor=False)
+    st.header("Vendor Control Heatmap")
 
     
     st.markdown("<p style='font-size: 14px;'>Hover over control names for details</p>", unsafe_allow_html=True)

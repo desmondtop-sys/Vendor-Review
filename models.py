@@ -9,6 +9,7 @@ class SecurityControl(BaseModel):
     status: int                 # 1 for Pass, 0 for Fail
     weight: int                 # The weight of the control - how much we care about this requirement
     must_pass: bool = False     # A requirement that absolutely cannot be missing
+    priority: int = 3           # Priority level (1-5), where 5 is highest priority
     evidence: str               # The AI's reasoning behind their Pass/Fail score
 
 class AIEvaluation(BaseModel):
@@ -45,8 +46,8 @@ class Vendor(BaseModel):
 
 class UserRole(str, Enum):
     ADMIN = "admin"              # Full system access, manage users/vendors
-    ANALYST = "analyst"          # Can view reports, create reports, manage vendors
-    VENDOR_CONTACT = "vendor"    # Can only see their own vendor's info
+    ANALYST = "analyst"          # Can view reports, create reports
+    CLIENT = "client"            # Can only see their own vendor's info
     VIEWER = "viewer"            # Read-only access to reports
 
 class User(BaseModel):
@@ -55,6 +56,7 @@ class User(BaseModel):
     email: str
     full_name: Optional[str] = None
     role: UserRole
+    assigned_vendor_id: Optional[int] = None        # For client users, which vendor they are associated with
     is_active: bool = True
     created_at: Optional[str] = None
     last_login: Optional[str] = None

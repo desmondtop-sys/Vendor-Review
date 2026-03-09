@@ -1,6 +1,9 @@
 import streamlit as st
 
 from backend.vendor_database import create_vendor
+from backend.permissions import Permission
+
+from frontend.auth_helpers import current_user_has_permission
 from frontend.styles import get_styles
 from frontend.views.vendor_views.heatmap_tab_view import render_heatmap_tab_view
 from frontend.views.vendor_views.list_tab_view import render_vendor_list_tab
@@ -12,12 +15,12 @@ def render_vendors_page() -> None:
 
     vendor_title_col, new_vendor_button_col, spacer = st.columns([0.8, 0.1, 0.1])
     with vendor_title_col:
-        st.title("🏢 Vendors", anchor=False)
+        st.title("🏢 Vendors")
     
     st.divider()
-    
+
     with new_vendor_button_col:
-        if st.button("➕ New Vendor", type="primary", width="stretch"):
+        if st.button("➕ New Vendor", type="primary", width="stretch", disabled=not current_user_has_permission(Permission.CREATE_VENDORS)):
             create_vendor("New Vendor")
             st.rerun()
 

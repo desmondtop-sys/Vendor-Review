@@ -105,6 +105,8 @@ def _execute_update(query: str, params: tuple = ()) -> int:
     Raises:
         sqlite3.OperationalError: If database is locked after all retries exhausted.
     """
+    # SQLite allows only one writer at a time; short lock windows are expected
+    # under concurrent actions, so we retry writes with exponential backoff.
     max_retries = 5
     base_delay = 0.1  # 100ms base delay
     
@@ -159,12 +161,6 @@ def init_db() -> None:
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     """)
-
-    # Backward-compatible migration for existing databases
-    cursor.execute("PRAGMA table_info(vendors)")
-    vendor_columns = [row[1] for row in cursor.fetchall()]
-    if "nda_signed" not in vendor_columns:
-        cursor.execute("ALTER TABLE vendors ADD COLUMN nda_signed INTEGER NOT NULL DEFAULT 0")
     
     # Create vendor_reports table with vendor_id foreign key
     cursor.execute("""
@@ -193,7 +189,6 @@ def init_db() -> None:
     conn.commit()
     
     conn.close()
-    print("⚡ Database Initialized!")
 
 
 def create_vendor(name: str) -> int:
@@ -335,22 +330,6 @@ def set_vendor_nda_signed(vendor_id: int, nda_signed: bool) -> None:
     )
 
 
-def get_vendor_nda_signed(vendor_id: int) -> bool:
-    """Get NDA signed status for a vendor.
-
-    Args:
-        vendor_id (int): Vendor identifier.
-
-    Returns:
-        bool: True if NDA is signed, False otherwise.
-    """
-    row = _execute_select_one(
-        "SELECT nda_signed FROM vendors WHERE id = ?",
-        (vendor_id,)
-    )
-    return bool(row[0]) if row else False
-
-
 def update_vendor_bitsight(
     vendor_id: int,
     company_guid: str | None = None,
@@ -417,6 +396,8 @@ def create_report_for_vendor(vendor_id: int) -> int:
     Returns:
         int: Newly created report ID.
     """
+    # Creating reports also increments per-vendor run_number; concurrent creates
+    # can race, so retry on transient failures / uniqueness conflicts.
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
     max_retries = 5
@@ -552,6 +533,8 @@ def save_report(report: Report) -> int | None:
     Raises:
         RuntimeError: If report version doesn't match DB version (concurrent edit detected)
     """
+    # Optimistic locking: write succeeds only if caller's report.version
+    # still matches DB version, preventing silent overwrite on concurrent edits.
     if not report.id:
         return None
         
@@ -621,51 +604,6 @@ def get_report_by_id(report_id: int) -> sqlite3.Row | None:
         (report_id,),
         use_row_factory=True
     )
-
-
-def get_all_reports() -> list[sqlite3.Row]:
-    """Fetch all stored reports ordered by newest timestamp first.
-
-    Returns:
-        list[sqlite3.Row]: Collection of report rows.
-    """
-    return _execute_select(
-        "SELECT * FROM vendor_reports ORDER BY timestamp DESC",
-        use_row_factory=True
-    )
-
-def delete_report(entry_id: int) -> None:
-    """Delete one report row and remove its associated storage folder.
-
-    Args:
-        entry_id (int): Report identifier to remove.
-    """
-
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    try:
-        # Find the folder path first
-        cursor.execute("SELECT storage_path FROM vendor_reports WHERE id = ?", (entry_id,))
-        result = cursor.fetchone()
-
-        # Use a parameterized query to prevent SQL injection
-        cursor.execute("DELETE FROM vendor_reports WHERE id = ?", (entry_id,))
-
-        # Delete the folder if it exists
-        if result and result[0]:
-            folder_path = result[0]
-            if os.path.exists(folder_path):
-                shutil.rmtree(folder_path)
-
-        conn.commit()
-        print(f"🗑️ Deleted entry ID: {entry_id}")
-
-    except sqlite3.Error as e:
-        print(f"❌ Database error: {e}")
-
-    finally:
-        conn.close()
 
 
 def delete_vendor(vendor_id: int) -> None:
@@ -794,61 +732,6 @@ def generate_vendor_report_from_db(db_report: sqlite3.Row | dict) -> Report:
         timestamp=db_report["timestamp"]
     )
 
-def print_reports_table() -> None:
-    """Print a formatted console view of all report rows for debugging."""
-    
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute("SELECT * FROM vendor_reports")
-        rows = cursor.fetchall()
-        
-        if not rows:
-            print("\n📭 Database is empty.")
-            return
-
-        # Define column widths
-        id_w, name_w, score_w, poss_w, file_w, path_w = 4, 20, 6, 14, 50, 40
-
-        # Print Header
-        header = (f"{'ID':<{id_w}} | {'Vendor Name':<{name_w}} | {'Score':<{score_w}} | "
-                  f"{'Possible Score':<{poss_w}} | {'File List':<{file_w}} | {'Storage Path'}")
-        print("\n" + header)
-        print("-" * len(header))
-
-        for row in rows:
-            files = json.loads(row['file_list_json']) if row['file_list_json'] else []
-            
-            # Prepare data for the first line
-            id_str = str(row['id'])
-            name_str = str(row['vendor_name'])[:name_w]
-            score_str = str(row['overall_score'])
-            poss_str = str(row['possible_score'])
-            path_str = str(row['storage_path'])
-            
-            # If there are no files, print one line and move on
-            if not files:
-                print(f"{id_str:<{id_w}} | {name_str:<{name_w}} | {score_str:<{score_w}} | "
-                      f"{poss_str:<{poss_w}} | {'(No files)':<{file_w}} | {path_str}")
-            else:
-                # Print the first file with the full metadata row
-                print(f"{id_str:<{id_w}} | {name_str:<{name_w}} | {score_str:<{score_w}} | "
-                      f"{poss_str:<{poss_w}} | {files[0]:<{file_w}} | {path_str}")
-                
-                # Stack remaining files in the 'File List' column
-                for extra_file in files[1:]:
-                    print(f"{'':<{id_w}} | {'':<{name_w}} | {'':<{score_w}} | "
-                          f"{'':<{poss_w}} | {extra_file:<{file_w}} | ")
-            
-            print("-" * len(header))
-            
-    except sqlite3.Error as e:
-        print(f"❌ Database error: {e}")
-    finally:
-        conn.close()
-
 
 def print_vendors_table() -> None:
     """Print all vendors with Bitsight information."""
@@ -914,6 +797,53 @@ def cleanup_database() -> None:
     finally:
         conn.close()
 
+def get_vendor_upload_metadata_path(vendor_id: int) -> Path:
+    """Get the path to the upload metadata file for a vendor.
+
+    Args:
+        vendor_id (int): Vendor identifier.
+
+    Returns:
+        Path: Path to the vendor's upload_metadata.json file.
+    """
+    return STORAGE_DIR / str(vendor_id) / "upload_metadata.json"
+
+
+def save_vendor_upload_metadata(vendor_id: int, metadata: dict) -> None:
+    """Save document upload metadata for a vendor.
+
+    Args:
+        vendor_id (int): Vendor identifier.
+        metadata (dict): Dictionary mapping document types to filenames.
+    """
+    metadata_path = get_vendor_upload_metadata_path(vendor_id)
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+
+def load_vendor_upload_metadata(vendor_id: int) -> dict:
+    """Load document upload metadata for a vendor.
+
+    Args:
+        vendor_id (int): Vendor identifier.
+
+    Returns:
+        dict: Dictionary mapping document types to filenames, or empty dict if not found.
+    """
+    metadata_path = get_vendor_upload_metadata_path(vendor_id)
+    
+    if not metadata_path.exists():
+        return {}
+    
+    try:
+        with open(metadata_path, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
 # Nuclear option. Using it in testing to add or remove columns from the database quickly
 def delete_database() -> None:
     """Completely remove report data by cleaning records and deleting DB file."""
@@ -939,7 +869,7 @@ if __name__ == "__main__":
 
     init_db()
 
-    print(get_all_reports())
+    # print(get_all_reports())  # Function removed - was unused
 
     print_vendors_table()
 

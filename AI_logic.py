@@ -75,21 +75,27 @@ def ai_evaluation(prompt: str, name: str | None, requirements: dict) -> AIEvalua
         ))
         """
 
+    # Reconcile AI-returned controls with current configuration metadata.
+    # This keeps saved results aligned even if prompt/schema omit some fields.
     corrected_controls = []
 
     # Map requirement details from config to ensure AI response is consistent with current settings
     for control in raw_results.controls:
+        
         # Find the requirement config by matching the name field
         req_config = None
+
         for key, value in requirements.items():
             if value.get("name") == control.name:
                 req_config = value
                 break
         
+        # Overwrite mutable fields from config so scoring and must-pass always reflect the latest admin settings.
         if req_config:
             control.requirement = req_config.get("description", "")
             control.weight = req_config.get("weight", 0)
             control.must_pass = req_config.get("must_pass", False)
+            control.priority = req_config.get("priority", 3)
         
         corrected_controls.append(control)
 
@@ -101,17 +107,22 @@ def ai_evaluation(prompt: str, name: str | None, requirements: dict) -> AIEvalua
     )
     return evaluation
 
-def generate_prompt(report_row: dict) -> str:
+def generate_prompt(report_row: dict, pdf_passwords: dict | None = None) -> str:
     """Build the full AI prompt from report metadata and stored PDF files.
 
     Args:
         report_row (dict): Dictionary containing vendor metadata and file list.
             Must include 'vendor_id', 'vendor_name', and 'file_list_json'.
+        pdf_passwords (dict | None): Dictionary mapping PDF filenames to their passwords.
+            Example: {'document.pdf': 'password123'}
 
     Returns:
         str: Prompt text combining AI instructions, requirements, vendor name,
         and extracted text from all available documents.
     """
+
+    if pdf_passwords is None:
+        pdf_passwords = {}
 
     vendor_id = report_row['vendor_id']
     vendor_name = report_row['vendor_name']
@@ -133,7 +144,9 @@ def generate_prompt(report_row: dict) -> str:
             file_ext = path.suffix.lower()
             
             if file_ext == '.pdf':
-                file_text = extract_text_from_pdf(path)
+                # Check if a password is provided for this file
+                password = pdf_passwords.get(path.name)
+                file_text = extract_text_from_pdf(path, password=password)
             elif file_ext in ['.xlsx', '.xls', '.csv']:
                 file_text = extract_text_from_spreadsheet(path)
             else:
@@ -171,11 +184,13 @@ def generate_prompt(report_row: dict) -> str:
 
     return prompt
 
-def generate_report(vendor_id: int) -> Report | None:
+def generate_report(vendor_id: int, pdf_passwords: dict | None = None) -> Report | None:
     """Create a new report for a vendor using all documents in their folder.
 
     Args:
         vendor_id (int): The vendor ID to create a report for.
+        pdf_passwords (dict | None): Dictionary mapping PDF filenames to their passwords.
+            Example: {'document.pdf': 'password123'}
 
     Returns:
         VendorReport | None: The new report with analysis results, or
@@ -188,6 +203,9 @@ def generate_report(vendor_id: int) -> Report | None:
         4. Request AI control evaluations.
         5. Save results to the new report version.
     """
+
+    if pdf_passwords is None:
+        pdf_passwords = {}
 
     # 1. Get all document files from vendor's documents folder
     documents_path = get_vendor_documents_path(vendor_id)
@@ -219,7 +237,7 @@ def generate_report(vendor_id: int) -> Report | None:
     }
 
     # 3. Generate the AI prompt from all vendor documents
-    prompt = generate_prompt(prompt_dict)
+    prompt = generate_prompt(prompt_dict, pdf_passwords=pdf_passwords)
     
     # 4. Request AI control evaluations
     raw_results = ai_evaluation(prompt, new_report_row['vendor_name'], get_ai_requirements())

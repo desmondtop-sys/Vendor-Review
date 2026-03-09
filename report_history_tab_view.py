@@ -12,14 +12,16 @@ from backend.vendor_database import (
     get_vendor_model_by_id
 )
 from backend.report_utils import calculate_score
+from backend.permissions import Permission
 
+from frontend.auth_helpers import current_user_has_permission
 from frontend.state_manager import reset_sandbox
-from frontend.utils import get_badge_styles
 from frontend.views.shared_components_view import render_oneline_security_score
 
 
 def render_report_history() -> None:
     """Render the report history timeline for the active vendor."""
+
 
     if not st.session_state.get("active_vendor_id"):
         st.info("Select a vendor to view its report history.")
@@ -38,7 +40,7 @@ def render_report_history() -> None:
         st.info("No reports yet for this vendor. Upload documents and Generate Report to create one.")
         return
 
-    st.subheader("📜 Report History", anchor=False)
+    st.subheader("📜 Report History")
     st.divider()
 
     for report in reports:
@@ -72,6 +74,7 @@ def render_report_history() -> None:
                 key=f"report_v{report['run_number']}_{vendor_id}",
                 width='stretch',
                 type=button_type,
+                disabled=not current_user_has_permission(Permission.SELECT_REPORTS),
             ):
                 set_active_report_for_vendor(vendor_id, report['id'])
                 st.session_state.active_report = report_obj
@@ -79,26 +82,27 @@ def render_report_history() -> None:
 
         with col5:
             # Delete report button
-            if st.session_state.get("is_admin", False):
-                if st.button(
-                    "🗑️",
-                    key=f"delete_v{report['run_number']}_{vendor_id}",
-                    width='stretch',
-                    type="secondary",
-                ):
-                    delete_report(vendor_id, report['id'])
+
+            if st.button(
+                "🗑️",
+                key=f"delete_v{report['run_number']}_{vendor_id}",
+                width='stretch',
+                type="secondary",
+                disabled=not current_user_has_permission(Permission.DELETE_REPORTS),
+            ):
+                delete_report(vendor_id, report['id'])
+                
+                # Clear simulation state to prevent errors with deleted report data
+                reset_sandbox()
+                
+                # Reload the active report (database function already set the new active one)
+                new_active_report_id = get_active_report_for_vendor(vendor_id)
+                if new_active_report_id:
+                    report_row = get_report_by_id(new_active_report_id)
+                    st.session_state.active_report = generate_vendor_report_from_db(report_row)
+                else:
+                    st.session_state.active_report = None
                     
-                    # Clear simulation state to prevent errors with deleted report data
-                    reset_sandbox()
-                    
-                    # Reload the active report (database function already set the new active one)
-                    new_active_report_id = get_active_report_for_vendor(vendor_id)
-                    if new_active_report_id:
-                        report_row = get_report_by_id(new_active_report_id)
-                        st.session_state.active_report = generate_vendor_report_from_db(report_row)
-                    else:
-                        st.session_state.active_report = None
-                    
-                    st.rerun()
+                st.rerun()
         
         st.divider()

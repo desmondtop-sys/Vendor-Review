@@ -4,15 +4,17 @@ import streamlit as st
 
 from backend.vendor_database import generate_vendor_report_from_db, get_all_vendor_reports, get_vendor_model_by_id
 from backend.report_utils import calculate_score
+from backend.permissions import Permission
 
-from frontend.views.shared_components_view import vertical_divider
+from frontend.views.shared_components_view import render_vertical_divider
 from frontend.utils import get_badge_styles
+from frontend.auth_helpers import current_user_has_permission
 
 
 def render_compare_reports() -> None:
     """Render the compare reports view for analyzing historical reports side-by-side."""
 
-    st.subheader("📊 Compare Reports", anchor=False)
+    st.subheader("📊 Compare Reports")
 
     vendor_id = st.session_state.active_vendor_id
     
@@ -44,7 +46,7 @@ def render_compare_reports() -> None:
         render_report_description(left_report_obj, "Report 1")
 
     with divider_col:
-        vertical_divider("40vh")
+        render_vertical_divider("40vh")
 
     with report2:
         render_report_description(right_report_obj, "Report 2")
@@ -154,7 +156,10 @@ def render_report_description(report_obj, label: str) -> None:
             
     # Summary text
     if report_obj.summary:
-        st.markdown(f"**Findings:** {report_obj.summary}")
+        if current_user_has_permission(Permission.VIEW_SUMMARIES):
+            st.markdown(f"**Findings:** {report_obj.summary}")
+        else:
+            st.caption("🔒 Executive summary is restricted to administrators only.")
 
 
 def render_report_title(report_obj) -> None:
@@ -164,7 +169,7 @@ def render_report_title(report_obj) -> None:
         report_obj: Generated VendorReport object
     """
     # Controls section
-    st.subheader("Security Controls", anchor=False)
+    st.subheader("Security Controls")
             
     if report_obj.controls:
         passed_count = sum(1 for c in report_obj.controls if c.status == 1)
@@ -189,7 +194,10 @@ def render_report_controls(report_obj) -> None:
                     st.metric("Status", "Pass" if control.status == 1 else "Fail")
                     st.metric("Weight", control.weight)
                 with col2:
-                    st.write(f"**Evidence:** {control.evidence}")
+                    if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                        st.write(f"**Evidence:** {control.evidence}")
+                    else:
+                        st.caption("🔒 Evidence view is restricted to administrators only.")
 
 
 def render_comparisons(left_report_obj, right_report_obj) -> None:
@@ -207,7 +215,10 @@ def render_comparisons(left_report_obj, right_report_obj) -> None:
         if right_control is None:
             with st.expander("➖ Removed from Report 2"):
                 st.write(f"**Status in Report 1:** {'✅ Pass' if control.status == 1 else '❌ Fail'}")
-                st.write(f"**Evidence:** {control.evidence}")
+                if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                    st.write(f"**Evidence:** {control.evidence}")
+                else:
+                    st.caption("🔒 Evidence view is restricted to administrators only.")
         else:
             if control.status == 1 and right_control.status == 1:
                 with st.expander("↔️ Both Pass"):
@@ -220,13 +231,25 @@ def render_comparisons(left_report_obj, right_report_obj) -> None:
             elif control.status == 1 and right_control.status == 0:
                 with st.expander("📉 Pass → Fail"):
                     st.write(f"**Report 1:** ✅ Pass")
-                    st.caption(f"{control.evidence}")
+                    if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                        st.caption(f"{control.evidence}")
+                    else:
+                        st.caption("🔒 Evidence restricted to admins")
                     st.write(f"**Report 2:** ❌ Fail")
-                    st.caption(f"{right_control.evidence}")
+                    if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                        st.caption(f"{right_control.evidence}")
+                    else:
+                        st.caption("🔒 Evidence restricted to admins")
                     
             elif control.status == 0 and right_control.status == 1:
                 with st.expander("📈 Fail → Pass"):
                     st.write(f"**Report 1:** ❌ Fail")
-                    st.caption(f"{control.evidence}")
+                    if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                        st.caption(f"{control.evidence}")
+                    else:
+                        st.caption("🔒 Evidence restricted to admins")
                     st.write(f"**Report 2:** ✅ Pass")
-                    st.caption(f"{right_control.evidence}")
+                    if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                        st.caption(f"{right_control.evidence}")
+                    else:
+                        st.caption("🔒 Evidence restricted to admins")

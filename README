@@ -3,7 +3,7 @@
 > AI-powered vendor security assessment tool powered by Google Gemini
 
 **Created by:** Desmond Top  
-**Last Updated:** February 26, 2026
+**Last Updated:** March 9, 2026
 
 ---
 
@@ -110,7 +110,7 @@ python -m pip install -r req.txt
 python -m streamlit run frontend/app.py
 ```
 
-The app will open at: `http://localhost:8501`
+The app will open by default at: `http://localhost:8501`
 
 ---
 
@@ -151,7 +151,7 @@ A complete security assessment containing:
 Each requirement evaluated:
 - **Requirement** - Security area being assessed (e.g., MFA, Encryption, Compliance Certifications)
 - **Status** - 1 = Pass, 0 = Fail
-- **Weight** - Importance level (1-10)
+- **Weight** - Importance level
 - **Must Pass** - Dealbreaker if failed
 - **Evidence** - AI reasoning for the decision
 
@@ -168,17 +168,32 @@ System prompt that tells the AI how to evaluate vendors. Modify to change:
 - What to focus on
 - Tone and format of analysis
 
+### `system_guidelines.txt`
+Additional AI behavioral guidelines and constraints:
+- Safety and compliance requirements
+- Output formatting rules
+- Hard constraints for AI responses
+
 ### `requirements.json`
-Security requirement definitions:
+Security requirement definitions example:
 ```json
 {
-  "MFA": {
-    "weight": 8,
-    "must_pass": true
-  },
-  "Encryption": {
-    "weight": 9,
-    "must_pass": true
+  "Requirement Name": {
+    "weight": 50,
+    "priority": 3,
+    "must_pass": true,
+    "description": "Detailed description of the requirement"
+  }
+}
+```
+
+### `client_documents.json`
+Document requirements for vendor uploads:
+```json
+{
+  "Document Name": {
+    "requirement": "required|optional|redundant_with_soc2",
+    "description": "What this document proves"
   }
 }
 ```
@@ -211,12 +226,18 @@ Vendor Review Project/
 │   │
 │   └── views/                      # UI components
 │       ├── view_controller.py      # View routing & orchestration
+│       ├── login_view.py           # Authentication interface
 │       ├── ai_settings_view.py     # Settings configuration page
 │       ├── vendors_page_view.py    # Vendor management page
-│       ├── left_sidebar_view.py    # Navigation & vendor history
-│       ├── main_col_view.py        # Main content area
-│       ├── right_sidebar_view.py   # File upload & actions
 │       ├── shared_components_view.py # Reusable UI components
+│       │
+│       ├── areas/                  # Layout components
+│       │   ├── left_sidebar_view.py    # Navigation & vendor history
+│       │   ├── main_col_view.py        # Main content area
+│       │   └── right_sidebar_view.py   # File upload & actions
+│       │
+│       ├── client_side_view/       # Client upload interface
+│       │   └── client_upload_view.py   # Document upload portal
 │       │
 │       ├── report_views/           # Report-specific tabs
 │       │   ├── dashboard_tab_view.py     # Overview & scores
@@ -226,15 +247,19 @@ Vendor Review Project/
 │       │   └── report_history_tab_view.py # Historical reports
 │       │
 │       └── vendor_views/           # Vendor-specific tabs
-│           └── list_tab_view.py    # Vendor list management
+│           ├── list_tab_view.py    # Vendor list management
+│           └── heatmap_tab_view.py  # Security heatmap visualization
 │
 ├── backend/                        # Core business logic
 │   ├── models.py                   # Data model definitions
-│   ├── database.py                 # SQLite operations
+│   ├── vendor_database.py          # Vendor data operations
+│   ├── user_database.py            # User management & authentication
+│   ├── permissions.py              # Role-based access control
 │   ├── AI_logic.py                 # Gemini API integration
 │   ├── config_manager.py           # Settings management
 │   ├── report_utils.py             # Scoring calculations
 │   ├── IO_engine.py                # PDF & I/O operations
+│   ├── pdf_password_manager.py     # Password-protected PDF handling
 │   ├── bitsight_client.py          # BitSight API integration
 │   ├── charts.py                   # Chart visualization
 │   │
@@ -246,56 +271,12 @@ Vendor Review Project/
 │   │
 │   └── Storage/                    # Data persistence
 │       └── {vendor_id}/            # Per-vendor storage
+│           ├── upload_metadata.json # Document upload tracking
 │           ├── documents/          # Uploaded PDF documents
 │           └── reports/            # Generated reports
 │               └── {report_id}/    # Individual report assets
 │
-└── Resources/                      # Images, assets
-```
+└── Resources/                      # Images, assets, sample data
+    └── hydro_ottawa_logo.png
 
----
-
-## Troubleshooting
-
-### "GEMINI_API_KEY is missing"
-- Ensure `.env` file exists in project root
-- Verify `GEMINI_API_KEY=` line is present and not commented out
-- Check no trailing/leading spaces in key
-
-### "Database locked" error
-- Close any other Python processes using the database
-- Ensure no other instances of the app are running
-- Try restarting the application
-
-### PDF extraction fails
-- Verify PDF files are valid/readable
-- Check file permissions
-- Check disk space in Storage/ directory
-
-### Streamlit widget not updating
-- Refresh browser page (Ctrl+R or Cmd+R)
-- Check browser console for JavaScript errors
-- Clear Streamlit cache: `streamlit cache clear`
-
-### AI evaluation returns incomplete results
-- Check that all required requirements are defined in `requirements.json`
-- Verify Gemini API quota isn't exceeded
-- Check API key has appropriate permissions
-
----
-
-## Development
-
-Key files to understand:
-- `backend/models.py` - Data structures
-- `backend/AI_logic.py` - AI integration flow
-- `backend/database.py` - Data persistence
-- `backend/IO_engine.py` - PDF & file I/O operations
-- `backend/bitsight_client.py` - BitSight API integration
-- `frontend/app.py` - Application entry point
-- `frontend/views/view_controller.py` - View routing logic
-- `frontend/state_manager.py` - Session state management
-
----
-
-**Last Updated: February 26, 2026**
+**Last Updated: March 9, 2026**

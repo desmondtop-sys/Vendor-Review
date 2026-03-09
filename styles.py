@@ -198,6 +198,12 @@ def settings_page_style() -> str:
             resize: none !important;
         }
 
+        /* Make the assign weights button taller */
+        div.st-key-assign_weights_button button {
+            min-height: 55px !important;
+            font-size: 16px !important;
+        }
+
         /* Scale settings content down on smaller windows without causing horizontal overflow */
         @media (max-width: 1600px) {
             section.main .block-container {

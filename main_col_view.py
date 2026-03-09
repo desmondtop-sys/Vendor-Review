@@ -6,6 +6,7 @@ from backend.vendor_database import (
     get_latest_report_for_vendor,
     get_vendor_model_by_id,
 )
+from backend.permissions import Permission
 
 from frontend.views.report_views.analysis_tab_view import render_analysis_tools
 from frontend.views.report_views.assets_tab_view import render_assets_page
@@ -17,6 +18,7 @@ from frontend.views.shared_components_view import render_security_score
 from frontend.styles import get_styles
 from frontend.utils import get_current_view_report, update_vendor_name
 from frontend.state_manager import handle_vendor_switch
+from frontend.auth_helpers import current_user_has_permission
 
 def validate_active_vendor() -> None:
     """Validate that the active vendor still exists in the database.
@@ -25,6 +27,19 @@ def validate_active_vendor() -> None:
     another vendor or show a message to the user.
     """
     vendor_id = st.session_state.get("active_vendor_id")
+    assigned_vendor_id = st.session_state.get("user_assigned_vendor_id")
+
+    # Scoped-vendor users are restricted to a single assigned vendor.
+    if current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS):
+        if assigned_vendor_id is None:
+            st.session_state.active_vendor_id = None
+            st.session_state.active_report = None
+            return
+
+        if vendor_id != assigned_vendor_id:
+            st.session_state.active_vendor_id = assigned_vendor_id
+            st.session_state.active_report = None
+            st.rerun()
     
     if vendor_id is None:
         return  # No vendor selected, nothing to validate
@@ -44,7 +59,7 @@ def render_main_col() -> None:
 
     # Title
     with st.container(key="main_title"):
-        st.title("⚡ Vendor Security Evaluator", anchor=False)
+        st.title("⚡ Vendor Security Evaluator")
 
     # Validate that the active vendor still exists (handles deletion by other users)
     validate_active_vendor()
@@ -53,6 +68,10 @@ def render_main_col() -> None:
     if "active_vendor_id" not in st.session_state or st.session_state.active_vendor_id is None:
 
         vendors = get_all_vendor_models()
+
+        if current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS):
+            assigned_vendor_id = st.session_state.get("user_assigned_vendor_id")
+            vendors = [vendor for vendor in vendors if vendor.id == assigned_vendor_id]
 
         if vendors:
             # Select the first vendor
@@ -107,7 +126,7 @@ def render_default_view() -> None:
         4. **Review Results**: The report will populate here once the analysis is complete.
         
         *Alternatively, select an existing vendor from the **Vendors** list on the left.*
-    """)
+    """, unsafe_allow_html=True)
 
 
 
@@ -121,6 +140,12 @@ def render_vendor_title() -> None:
     vendor_id = st.session_state.get("active_vendor_id")
     if not vendor_id:
         return
+
+    if current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS):
+        assigned_vendor_id = st.session_state.get("user_assigned_vendor_id")
+        if vendor_id != assigned_vendor_id:
+            st.warning("⚠️ Access denied for this vendor.")
+            return
 
     vendor = get_vendor_model_by_id(vendor_id)
     if not vendor:

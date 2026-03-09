@@ -14,6 +14,13 @@ BITSIGHT_BASE_URL = "https://api.bitsighttech.com/ratings/v1"
 
 
 def _build_auth(api_key: str) -> tuple[dict[str, str], tuple[str, str] | None]:
+    """Build Bitsight request headers/auth based on configured auth mode.
+
+    Supported modes via BITSIGHT_AUTH_TYPE:
+    - bearer: Authorization: Bearer <key>
+    - token:  Authorization: Token <key>
+    - basic (default): HTTP Basic auth with key as username
+    """
     auth_type = os.getenv("BITSIGHT_AUTH_TYPE", "basic").lower()
     headers = {"Accept": "application/json"}
 
@@ -66,10 +73,12 @@ def get_company_rating_by_name(company_name: str) -> dict[str, Any] | None:
     if not results:
         return None
 
-    # Normalize search term for comparison
+    # Normalize names so formatting differences (spaces/punctuation/case)
+    # do not prevent a valid company match.
     search_normalized = company_name.strip().lower().replace(" ", "").replace(".", "").replace("-", "")
     
-    # Try normalized match (ignore spaces, dots, hyphens)
+    # First pass: require exact equality after normalization.
+    # This avoids accidentally picking the wrong company in broad results.
     for company in results:
         returned_name = company.get("name", "")
         returned_normalized = returned_name.strip().lower().replace(" ", "").replace(".", "").replace("-", "")
@@ -81,7 +90,8 @@ def get_company_rating_by_name(company_name: str) -> dict[str, Any] | None:
                 "rating_date": company.get("rating_date") or company.get("rating_date_utc"),
             }
     
-    # Check if search term is contained in result or vice versa (for at least 5 chars)
+    # Fallback pass: allow partial containment match for reasonably long names.
+    # The 5-character minimum prevents overly permissive short-string matches.
     if len(search_normalized) >= 5:
         for company in results:
             returned_name = company.get("name", "")

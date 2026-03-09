@@ -2,9 +2,11 @@ import streamlit as st
 
 from backend.report_utils import get_security_score_by_id
 from backend.vendor_database import save_report, get_vendor_model_by_id, get_report_by_id
+from backend.permissions import Permission
 
 from frontend.styles import get_styles
 from frontend.views.shared_components_view import render_delete_vendor_button, render_nda_toggle_button
+from frontend.auth_helpers import current_user_has_permission
 
 
 def _save_report_safely(report) -> bool:
@@ -13,14 +15,14 @@ def _save_report_safely(report) -> bool:
     Returns True if successful, False if report was deleted or error occurred.
     Automatically reruns on error.
     """
-    # Check if report still exists
+    # Validate record existence first because another user may have deleted it while this client still has stale in-memory state.
     if not get_report_by_id(report.id):
         st.error("This report was deleted. Reloading...")
         st.session_state.active_report = None
         st.rerun()
         return False
     
-    # Try to save
+    # Save can raise version conflict errors when concurrent edits occur.
     try:
         save_report(report)
         return True
@@ -66,7 +68,7 @@ def render_report_summary() -> None:
         report = st.session_state.active_report
     
         run_number = report.run_number if report else "0"
-        st.subheader(f"**Report Version:** _v{run_number}_", anchor=False)
+        st.subheader(f"**Report Version:** _v{run_number}_")
 
     # Render NDA toggle button in header for easy access
     with nda_col:
@@ -81,7 +83,7 @@ def render_report_summary() -> None:
 
     # Print report date
     timestamp = report.timestamp[:10] if report and report.timestamp else "Unknown"
-    st.subheader(f"**Date:** _{timestamp}_", anchor=False)
+    st.subheader(f"**Date:** _{timestamp}_")
 
     if report is None:
         score = 0
@@ -95,7 +97,10 @@ def render_report_summary() -> None:
 
         summary = report.summary
 
-    st.info(summary)
+    if current_user_has_permission(Permission.VIEW_SUMMARIES):
+        st.info(summary)
+    else:
+        st.info("🔒 Executive summary is restricted to administrators only.")
 
     if must_pass_failed:
         st.error("🛑 CRITICAL FAILURE: One or more 'Must Pass' requirements were not met.")
@@ -105,7 +110,7 @@ def render_requirements() -> None:
     header_col, include_col = st.columns([0.9, 0.1])
         
     with header_col:
-        st.subheader("Requirement Breakdown", anchor=False)
+        st.subheader("Requirement Breakdown")
 
     with include_col:
         st.markdown(
@@ -129,6 +134,7 @@ def render_requirements() -> None:
             if control.status == 1:
                 status_icon = "✅ Pass" 
             elif control.status == 0 and control.must_pass == True:
+                # Must-pass failures are elevated to critical regardless of score.
                 status_icon = "‼️ CRITICAL FAIL"
             else:
                 status_icon = "❌ Fail"
@@ -137,8 +143,12 @@ def render_requirements() -> None:
                 st.write(f"**Requirement Description:** {control.requirement}")
 
                 st.divider()
-
-                st.write(f"**Evidence Found:** {control.evidence}")
+                
+                if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                    st.write(f"**Evidence Found:** {control.evidence}")
+                else:
+                    # Keep requirement visibility for scoped users while hiding sensitive extracted evidence.
+                    st.caption("🔒 Evidence view is restricted to administrators only.")
 
         with weight_col:
             st.markdown(
@@ -166,7 +176,8 @@ def render_requirements() -> None:
                 "Include", 
                 value=(control.name not in report.excluded_names),
                 key=f"check_{control.name}_{report.id}",
-                label_visibility="collapsed"
+                label_visibility="collapsed", 
+                disabled=not current_user_has_permission(Permission.TOGGLE_CONTROL_INCLUSION),
             )
     
             # Logic to update the object and database directly

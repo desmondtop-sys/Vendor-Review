@@ -37,27 +37,99 @@ class PDF(FPDF):
         # Add some space after the header
         self.ln(28)
 
-def extract_text_from_pdf(pdf_path: str | os.PathLike) -> str:
+def detect_locked_pdfs(directory_path: str | os.PathLike) -> list[str]:
+    """Detect PDFs that actually require a password to read content.
+    
+    This function tests whether PDFs can be read without a password.
+    Some PDFs have encryption flags but can still be opened without one.
+
+    Args:
+        directory_path (str | os.PathLike): Path to directory containing PDFs.
+
+    Returns:
+        list[str]: List of PDF filenames that actually require a password to extract text.
+    """
+    locked_files = []
+    dir_path = Path(directory_path)
+    
+    if not dir_path.exists():
+        return locked_files
+    
+    for file_path in dir_path.iterdir():
+        if file_path.suffix.lower() == '.pdf' and file_path.is_file():
+            try:
+                reader = PdfReader(file_path)
+                
+                # Try to read at least one page to verify we can access content
+                if len(reader.pages) > 0:
+                    # Attempt to extract text from the first page
+                    _ = reader.pages[0].extract_text()
+                    # If we got here, the PDF is readable
+                    continue
+                else:
+                    # Empty PDF, not locked
+                    continue
+                    
+            except Exception as e:
+                # If extraction fails, check if it's due to encryption
+                error_msg = str(e).lower()
+                if "encrypt" in error_msg or "password" in error_msg or "decrypt" in error_msg:
+                    locked_files.append(file_path.name)
+                # Otherwise, it might be corrupted but not password-protected
+    
+    return locked_files
+
+def extract_text_from_pdf(pdf_path: str | os.PathLike, password: str | None = None) -> str:
     """Extract and concatenate text from all pages in a PDF file.
+    
+    Also extracts form field values for filled forms.
 
     Args:
         pdf_path (str | os.PathLike): Path to the PDF document on disk.
+        password (str | None): Optional password for encrypted PDFs.
 
     Returns:
-        str: Combined text content from every page in order. Returns
-        "Not Found." when the file does not exist.
+        str: Combined text content from every page plus form field values.
+        Returns error message if file is locked, corrupted, or cannot be read.
+        Returns "Not Found." when the file does not exist.
     """
     
     # Check if the file actually exists before trying to open it
     if not os.path.exists(pdf_path):
         return "Not Found."
     
-    # If it exists, read it normally
-    reader = PdfReader(pdf_path)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
+    try:
+        # If it exists, read it normally
+        reader = PdfReader(pdf_path)
+        
+        # Check if the PDF is encrypted
+        if reader.is_encrypted:
+            if password:
+                # Try to decrypt with provided password
+                if not reader.decrypt(password):
+                    return f"Error: Incorrect password for encrypted PDF."
+            else:
+                return f"Error: PDF is password-protected. Please provide the password to unlock it."
+        
+        text = ""
+        
+        # Extract form field values first (for filled questionnaires, etc.)
+        fields = reader.get_fields()
+        if fields:
+            for field_name, field in fields.items():
+                # Get the field value
+                field_value = field.get("/V")
+                if field_value:
+                    text += f"{field_name}: {field_value}\n"
+        
+        # Then extract regular page text
+        for page in reader.pages:
+            text += page.extract_text()
+        
+        return text
+    
+    except Exception as e:
+        return f"Error reading PDF (possibly locked or corrupted): {str(e)}"
 
 def extract_text_from_spreadsheet(file_path: str | os.PathLike) -> str:
     """Extract and format data from spreadsheet files (Excel, CSV).
@@ -145,7 +217,7 @@ def generate_pdf_report() -> bytes:
     pdf.cell(0, 10, f"Vendor: {clean_vendor_name}", ln=True, align="C")
     pdf.ln(10)
 
-    # Score Summary Box
+    # Visual status card uses green for pass and red for all non-pass outcomes.
     if result_text == "PASSED":
         result_color = (40, 120, 60)
     else:
@@ -183,6 +255,7 @@ def generate_pdf_report() -> bytes:
     pdf.cell(0, 10, "Detailed Requirement Breakdown", ln=True)
     pdf.set_font("Arial", "", 10)
 
+    # Only include controls that were not excluded by the user in the report view. This ensures the PDF reflects exactly what the user sees in their report, including any manual exclusions.
     controls = [c for c in report.controls if c.name not in report.excluded_names]
     
     for control in controls:
@@ -213,8 +286,8 @@ def generate_pdf_report() -> bytes:
     # Full audit prompt
     pdf.add_page() # Start prompt on a new page for clarity
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, "Full Audit Technical Prompt", ln=True)
-    pdf.cell(0, 8, "The full prompt sent to the AI model:", ln=True)
+    pdf.cell(0, 10, "Technical Prompt", ln=True)
+    pdf.cell(0, 6, "Full prompt sent to the AI model:", ln=True)
     pdf.ln(2)
     
     pdf.set_font("Courier", "", 8) # Use monospace to denote raw data
