@@ -1,0 +1,46 @@
+{
+    "SOC 2 Type II Report": {
+        "description": "Most recent SOC 2 Type II audit report",
+        "requirement": "required"
+    },
+    "ISO 27001 Certificate": {
+        "description": "Current ISO 27001 certification document",
+        "requirement": "required"
+    },
+    "Cybersecurity Policy": {
+        "description": "Copy of the organization's Cybersecurity Policy and any accompanying documents",
+        "requirement": "redundant_with_soc2"
+    },
+    "Privacy Impact Assessment": {
+        "description": "Hydro Ottawa's Privacy Impact Assessment document, completed by the Hydro Ottawa Contact",
+        "requirement": "redundant_with_soc2"
+    },
+    "Data Center Certifications": {
+        "description": "Copies of certifications for all data centers that could process Hydro Ottawa data",
+        "requirement": "redundant_with_soc2"
+    },
+    "Network Architecture Diagrams": {
+        "description": "Diagrams clearly identifying high-risk environments and data flows, including those with legal compliance impacts",
+        "requirement": "redundant_with_soc2"
+    },
+    "Development Software Licenses": {
+        "description": "A list of all current development software licenses",
+        "requirement": "required"
+    },
+    "Incident Response Workflow Diagram": {
+        "description": "A workflow diagram of the process for system failure",
+        "requirement": "redundant_with_soc2"
+    },
+    "Product Life Cycle and Roadmap": {
+        "description": "Details regarding the application's defined product life cycle and roadmap",
+        "requirement": "required"
+    },
+    "Application Documentation": {
+        "description": "Documentation describing and illustrating major application components and data flows",
+        "requirement": "required"
+    },
+    "Vendor Questionnaire": {
+        "description": "Completed Hydro Ottawa 3rd Party Cybersecurity Questionnaire providing detail on related processes or controls",
+        "requirement": "required"
+    }
+}
