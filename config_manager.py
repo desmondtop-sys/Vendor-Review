@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from defs import DEFAULT_FAIL_THRESHOLD, DEFAULT_PASS_THRESHOLD
+
 BACKEND_DIR = Path(__file__).resolve().parent
 
 def get_system_guidelines() -> str:
@@ -91,7 +93,7 @@ def get_threshold_settings():
     """
     settings_path = BACKEND_DIR / "config/settings.json"
     
-    defaults = {"pass_threshold": 80, "fail_threshold": 50}
+    defaults = {"pass_threshold": DEFAULT_PASS_THRESHOLD, "fail_threshold": DEFAULT_FAIL_THRESHOLD}
     
     if settings_path.exists():
         try:

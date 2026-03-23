@@ -1,6 +1,8 @@
 import streamlit as st
 import copy
 
+from defs import FAIL, PASS, Page, Main_Col_Tabs
+
 from backend.models import Report
 from backend.vendor_database import (
     get_latest_report_for_vendor,
@@ -15,7 +17,7 @@ def mark_dirty() -> None:
 
     st.session_state.is_dirty = True
 
-def reset_states() -> None:
+def reset_uploader() -> None:
     """Reset transient UI widget state used across screens.
 
     Increments uploader key version so Streamlit renders a fresh file uploader
@@ -48,9 +50,9 @@ def init_session_state() -> None:
     if "uploader_id" not in st.session_state: 
         st.session_state.uploader_id = 0
     if "current_page" not in st.session_state: 
-        st.session_state.current_page = "Dashboard"
+        st.session_state.current_page = Page.DASHBOARD.value
     if "current_tab" not in st.session_state: 
-        st.session_state.current_tab = "Dashboard"
+        st.session_state.current_tab = Main_Col_Tabs.DASHBOARD.value
     if "active_vendor_id" not in st.session_state:
         st.session_state.active_vendor_id = None
     if "active_report" not in st.session_state:
@@ -100,12 +102,12 @@ def handle_vendor_switch(vendor_id: int) -> None:
         else:
             st.session_state.active_report = None
     
-    reset_states()  # Clear uploader
+    reset_uploader()  # Clear uploader
     reset_sandbox()  # Kill old simulation
 
     # Go back to dashboard
-    st.session_state.current_page = "Dashboard"
-    st.session_state.current_tab = "Dashboard"
+    st.session_state.current_page = Page.DASHBOARD.value
+    st.session_state.current_tab = Main_Col_Tabs.DASHBOARD.value
 
     st.rerun()
 
@@ -124,12 +126,12 @@ def handle_report_switch(new_report: Report) -> None:
     if st.session_state.active_vendor_id and new_report.id:
         set_active_report_for_vendor(st.session_state.active_vendor_id, new_report.id)
     
-    reset_states() # Clear uploader
+    reset_uploader() # Clear uploader
     reset_sandbox() # Kill old simulation
 
     # Go back to dashboard
-    st.session_state.current_page = "Dashboard"
-    st.session_state.current_tab = "Dashboard"
+    st.session_state.current_page = Page.DASHBOARD.value
+    st.session_state.current_tab = Main_Col_Tabs.DASHBOARD.value
 
     st.rerun()
 
@@ -188,5 +190,5 @@ def sync_sim_status(req_name: str, select_key: str) -> None:
     
     for ctrl in sim_report.controls:
         if ctrl.requirement == req_name:
-            ctrl.status = 1 if "Pass" in choice else 0 # Simple binary toggle
+            ctrl.status = PASS if "Pass" in choice else FAIL # Simple binary toggle
             break

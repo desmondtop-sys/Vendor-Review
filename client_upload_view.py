@@ -1,5 +1,4 @@
 import streamlit as st
-from pathlib import Path
 
 from backend.vendor_database import (
     get_vendor_documents_path,
@@ -10,7 +9,8 @@ from backend.vendor_database import (
 from backend.config_manager import get_client_documents
 from backend.permissions import Permission
 from frontend.auth_helpers import current_user_has_permission
-from frontend.views.shared_components_view import render_vertical_divider
+from frontend.views.shared_components_view import render_logo, render_vertical_divider
+from defs import Requirement
 
 
 def render_client_upload_page() -> None:
@@ -39,10 +39,13 @@ def render_client_upload_page() -> None:
         st.stop()
     
     # Header with logout button
-    col1, col2 = st.columns([0.85, 0.15])
-    with col1:
+    logo_col, title_col, logout_col = st.columns([0.07, 0.78, 0.15])
+
+    with logo_col:
+        render_logo()
+    with title_col:
         st.title(f"📤 {vendor.name} - Document Uploader")
-    with col2:
+    with logout_col:
         if st.button("🚪 Logout", use_container_width=True):
             st.session_state.clear()
             st.rerun()
@@ -75,7 +78,7 @@ def render_client_upload_page() -> None:
     intro_text += "\n- Documents marked with **🔴** are required"
     intro_text += "\n- Documents marked with **🟡** are optional"
     if soc2_provided:
-        intro_text += "\n- Documents marked with **⚪** are made redundant by your SOC 2 report (not needed)"
+        intro_text += "\n- Documents marked with **⚪** are made optional by your SOC 2 report submission"
     else:
         intro_text += "\n- Documents marked with **⚪** are required unless you upload a SOC 2 report"
     intro_text += "\n\n**Accepted file formats:** PDF, Excel (.xlsx, .xls), CSV"
@@ -101,11 +104,11 @@ def render_uploader_modules(required_documents: dict, vendor_id: int, upload_met
     
     # Create uploaders for each document type, alternating between columns
     for doc_type, doc_info in required_documents.items():
-        requirement = doc_info.get("requirement", "required")
+        requirement = doc_info.get("requirement", Requirement.REQUIRED.value)
         
         # If SOC 2 is provided, redundant documents become optional
-        if requirement == "redundant_with_soc2" and soc2_provided:
-            requirement = "optional"
+        if requirement == Requirement.REDUNDANT_WITH_SOC2.value and soc2_provided:
+            requirement = Requirement.OPTIONAL.value
         
         with current_col:
             render_document_uploader(
@@ -145,11 +148,11 @@ def render_document_uploader(
     """
     
     # Display document type and description
-    if requirement == "required":
+    if requirement == Requirement.REQUIRED.value:
         status_icon = "🔴"
-    elif requirement == "optional":
+    elif requirement == Requirement.OPTIONAL.value:
         status_icon = "🟡"
-    elif requirement == "redundant_with_soc2":
+    elif requirement == Requirement.REDUNDANT_WITH_SOC2.value:
         if soc2_provided:
             status_icon = "⚪"
         else:
@@ -315,9 +318,9 @@ def render_upload_summary(upload_metadata: dict, required_documents: dict, soc2_
     st.markdown("### 📊 Upload Summary")
     
     # Calculate progress based on requirement status
-    required_docs = {k: v for k, v in required_documents.items() if v.get("requirement") == "required"}
-    optional_docs = {k: v for k, v in required_documents.items() if v.get("requirement") == "optional"}
-    redundant_docs = {k: v for k, v in required_documents.items() if v.get("requirement") == "redundant_with_soc2"}
+    required_docs = {k: v for k, v in required_documents.items() if v.get("requirement") == Requirement.REQUIRED.value}
+    optional_docs = {k: v for k, v in required_documents.items() if v.get("requirement") == Requirement.OPTIONAL.value}
+    redundant_docs = {k: v for k, v in required_documents.items() if v.get("requirement") == Requirement.REDUNDANT_WITH_SOC2.value}
     
     # Categorize docs based on SOC 2 status
     if soc2_provided:

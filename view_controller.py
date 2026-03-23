@@ -1,5 +1,7 @@
 import streamlit as st
 
+from defs import Page, Main_Col_Tabs
+
 from backend.vendor_database import init_db as init_vendor_db
 from backend.user_database import init_user_db
 from backend.permissions import Permission
@@ -10,9 +12,10 @@ from frontend.views.areas.main_col_view import render_main_col
 from frontend.views.areas.right_sidebar_view import render_right_sidebar
 
 from frontend.views.ai_settings_view import render_ai_settings_page
-from frontend.views.client_side_view.client_upload_view import render_client_upload_page
+from frontend.views.client_side_views.client_upload_view import render_client_upload_page
 from frontend.views.login_view import render_login_page
 from frontend.views.shared_components_view import render_vertical_divider
+from frontend.views.user_control_page_view import render_user_control_page
 from frontend.views.vendors_page_view import render_vendors_page
 
 from frontend.utils import run_analysis, get_pdf_passwords_from_ui
@@ -76,32 +79,35 @@ def render_web_app() -> None:
 
     # Scoped-vendor users are restricted from admin surfaces (Vendors/Settings).
     # If they navigate there via stale state/URL, force-reset to Dashboard.
-    if current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS) and st.session_state.current_page in {"Vendors", "Settings"}:
-        st.session_state.current_page = "Dashboard"
-        st.session_state.current_tab  = "Dashboard"
+    if current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS) and st.session_state.current_page in {Page.VENDORS.value, Page.SETTINGS.value}:
+        st.session_state.current_page = Page.DASHBOARD.value
+        st.session_state.current_tab  = Main_Col_Tabs.DASHBOARD.value
         st.rerun()
 
     # Render settings page if selected
-    if st.session_state.current_page == "Settings":
+    if st.session_state.current_page == Page.SETTINGS.value:
         render_ai_settings_page()
         
     # Render vendors page if selected
-    elif st.session_state.current_page == "Vendors":
+    elif st.session_state.current_page == Page.VENDORS.value:
         render_vendors_page()
+
+    elif st.session_state.current_page == Page.USER_CONTROL.value:
+        render_user_control_page()
 
     # Otherwise, render dashboard by default
     else:
 
         # Main Area Split (Report & Documents)
         with st.container(key="app_shell"):
-            mid_content, col_spacer, right_info = st.columns([0.79, 0.01, 0.20])
+            mid_content, col_spacer, right_info = st.columns([0.77, 0.03, 0.20])
 
             with mid_content:
                 render_main_col()
 
             # Vertical divider between the main content and right sidebar
             with col_spacer:
-                render_vertical_divider("100vh")
+                render_vertical_divider("150vh")
 
             with right_info:
                 render_right_sidebar()

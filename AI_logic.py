@@ -1,8 +1,11 @@
 import json
 import os
+import time
 from pathlib import Path
 from google import genai
 from dotenv import load_dotenv
+
+from defs import DEFAULT_PRIORITY
 
 from backend.models import Report, AIEvaluation
 from backend.IO_engine import extract_text_from_pdf, extract_text_from_spreadsheet
@@ -27,7 +30,7 @@ def ai_evaluation(prompt: str, name: str | None, requirements: dict) -> AIEvalua
     Args:
         prompt (str): Full prompt containing instructions, requirements, and
             extracted document context.
-        name (str | None): Vendor display name. Defaults to "Test Vendor"
+        name (str | None): Vendor display name. Defaults to "New Vendor"
             when "None".
         requirements (dict): Requirement configuration keyed by requirement name,
             containing metadata such as "weight" and "must_pass".
@@ -38,7 +41,7 @@ def ai_evaluation(prompt: str, name: str | None, requirements: dict) -> AIEvalua
     """
 
     if name is None:
-        name = "Test Vendor"
+        name = "New Vendor"
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -49,31 +52,20 @@ def ai_evaluation(prompt: str, name: str | None, requirements: dict) -> AIEvalua
     
     
     model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-
+    
+    # Track Gemini API response time
+    start_time = time.time()
     response = client.models.generate_content(model=model_name,
                        contents=prompt,
                        config={
             "response_mime_type": "application/json",
             "response_schema": AIEvaluation}       # AIEvaluation defined in models.py
         )
+    end_time = time.time()
+    response_time = end_time - start_time
+    print(f"Gemini API response time: {response_time:.2f} seconds")
+    
     raw_results = response.parsed
-
-    """
-
-
-    # MOCK RESPONSE for testing
-    ai_requirements = get_ai_requirements()
-    raw_results = []
-    for i, requirement in enumerate(ai_requirements):
-        status = 0 if i % 4 == 0 else 1
-        raw_results.append(SecurityControl(
-            requirement=requirement,
-            status=status,
-            weight=-1,
-            must_pass=False,
-            evidence=f"Sample evidence for {requirement}"
-        ))
-        """
 
     # Reconcile AI-returned controls with current configuration metadata.
     # This keeps saved results aligned even if prompt/schema omit some fields.
@@ -95,15 +87,18 @@ def ai_evaluation(prompt: str, name: str | None, requirements: dict) -> AIEvalua
             control.requirement = req_config.get("description", "")
             control.weight = req_config.get("weight", 0)
             control.must_pass = req_config.get("must_pass", False)
-            control.priority = req_config.get("priority", 3)
+            control.critical_fail_on_sensitive_data = req_config.get("critical_fail_on_sensitive_data", False)
+            control.priority = req_config.get("priority", DEFAULT_PRIORITY)
         
         corrected_controls.append(control)
 
-    # Create and return AIEvaluation object
+    # Create and return updated AIEvaluation object
     evaluation = AIEvaluation(
         vendor_name=raw_results.vendor_name,
         controls=corrected_controls,
-        summary=raw_results.summary
+        data_type=raw_results.data_type,
+        summary=raw_results.summary,
+        runtime=response_time,
     )
     return evaluation
 
@@ -177,6 +172,7 @@ def generate_prompt(report_row: dict, pdf_passwords: dict | None = None) -> str:
         f"Requirements to check:\n" + "\n".join(req_list) + "\n\n"
         f"Name of Vendor: {vendor_name}\n\n"
         f"Bitsight Rating: {bitsight_rating}\n\n"
+        f"Vendor Website: {vendor_row.website_URL if vendor_row and vendor_row.website_URL else 'N/A'}\n\n"
         f"--- START OF DOCUMENTS ---\n"
         f"{documents_context}"
         f"--- END OF DOCUMENTS ---"
@@ -250,11 +246,13 @@ def generate_report(vendor_id: int, pdf_passwords: dict | None = None) -> Report
         overall_score=-1,   # Brief temporary value
         possible_score=-1,  # Brief temporary value
         summary=raw_results.summary,
+        data_type=raw_results.data_type,
         controls=raw_results.controls,
         file_names=file_names,
         storage_path=str(Path(new_report_row['storage_path'])),
         run_number=new_report_row['run_number'],
-        timestamp=new_report_row['timestamp']
+        timestamp=new_report_row['timestamp'],
+        runtime=raw_results.runtime,
     )
 
     # 5. Recalculate score and save the updated report

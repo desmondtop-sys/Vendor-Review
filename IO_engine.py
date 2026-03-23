@@ -13,7 +13,7 @@ from pypdf import PdfReader
 import streamlit as st
 
 from backend.config_manager import get_threshold_settings
-from backend.report_utils import get_security_score_by_id
+from backend.report_utils import check_critical_failure, get_security_score_by_id
 from backend.charts import generate_report_pie_chart
 
 import logging
@@ -185,19 +185,19 @@ def generate_pdf_report() -> bytes:
 
     Notes:
         - Excluded requirements are omitted from detailed breakdown.
-        - Status becomes "CRITICAL FAILURE" if any must-pass control fails.
+        - Status becomes "CRITICAL FAILURE" if any must-pass control fails, or if any control marked critical for sensitive data fails when data type is Confidential/Restricted.
     """
     report = st.session_state.active_report
 
     if not report:
         return b""
 
-    score, possible, must_pass_failed = get_security_score_by_id(report.id)
+    score, possible, critical_failure = get_security_score_by_id(report.id)
     thresholds = get_threshold_settings()
     
     # Calculate Result
     percentage = (score / possible) * 100 if possible > 0 else 0
-    if must_pass_failed:
+    if critical_failure:
         result_text = "CRITICAL FAILURE"
     elif percentage >= thresholds["pass_threshold"]:
         result_text = "PASSED"
@@ -215,6 +215,12 @@ def generate_pdf_report() -> bytes:
     pdf.set_font("Arial", "", 12)
     clean_vendor_name = report.vendor_name.encode('ascii', 'ignore').decode('ascii')
     pdf.cell(0, 10, f"Vendor: {clean_vendor_name}", ln=True, align="C")
+    
+    # Add data type
+    data_type_str = report.data_type.value if report.data_type else "Not Specified"
+    pdf.set_font("Arial", "I", 11)
+    pdf.cell(0, 8, f"Data Type: {data_type_str}", ln=True, align="C")
+    pdf.set_font("Arial", "", 12)
     pdf.ln(10)
 
     # Visual status card uses green for pass and red for all non-pass outcomes.
@@ -262,7 +268,7 @@ def generate_pdf_report() -> bytes:
             
         pdf.set_font("Arial", "B", 10)
 
-        if getattr(control, 'must_pass', False) and control.status == 0:
+        if check_critical_failure(control, report.data_type):
             status = "CRITICAL FAIL"
             pdf.set_text_color(150, 50, 50)
         elif control.status == 1:

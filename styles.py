@@ -4,6 +4,9 @@ This module provides CSS styling functions that are imported and rendered
 across the application to maintain consistent appearance and formatting.
 """
 
+from defs import COLOR_DIVIDER
+
+
 def primary_buttons() -> str:
     """Return shared primary-button CSS overrides.
 
@@ -49,6 +52,7 @@ def left_sidebar_style() -> str:
         </style>
         """
     
+    style += primary_buttons()
     return style
 
 def vendor_title_style() -> str:
@@ -258,6 +262,26 @@ def vendors_page_style() -> str:
     style += primary_buttons()
     return style
 
+def user_control_page_style() -> str:
+    
+    # Apply border styling with CSS
+    style = """
+    <style>
+    .user-info-container {
+        border: 2px solid #4A6984;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        background-color: rgba(74, 105, 132, 0.05);
+    }
+    .user-info-container p {
+        margin: 4px 0;
+    }
+    </style>
+    """
+
+    return style
+
 def heatmap_style() -> str:
     """Return CSS used by the vendor heatmap tab."""
 
@@ -439,6 +463,7 @@ _PAGE_STYLES = {
     "right_sidebar": right_sidebar_style,
     "ai_settings_page": settings_page_style,
     "vendors_page": vendors_page_style,
+    "user_control_page": user_control_page_style,
     "heatmap": heatmap_style,
     "analysis_loading": analysis_loading_style,
     "login_page": login_page_style
@@ -454,40 +479,39 @@ def get_styles(page: str) -> str:
         str: Final HTML style block containing global and page CSS.
     """
 
-    styles = ""
-
     # Universal styles
-    styles += """
+    styles = """
         <style>   
 
         /* Edit margins around entire screen to reduce blank space */
-        .block-container {
+        .block-container {{
             padding-top: clamp(1.25rem, 3vw, 5rem);
             padding-bottom: clamp(1.25rem, 3vw, 5rem);
             padding-left: clamp(1rem, 3vw, 5rem);
             padding-right: clamp(1rem, 3vw, 5rem);
-        }
+        }}
 
         /* Globally hide anchors for headers */
-        .stMarkdown h3 a {
+        .stMarkdown h3 a {{
             display: none !important;
-        }
+        }}
 
         /* Reduce main header height */
-        .st-key-main_title h1 {
+        .st-key-main_title h1 {{
             font-size: clamp(1.3rem, 2vw, 2rem);
             line-height: 1.1;
             margin: 0 0 0 0;
-        }
+        }}
 
         /* Main dashboard shell (center + right panel) */
-        div.st-key-app_shell div.app-shell-divider {
-            border-left: 1px solid #31333F;
+        div.st-key-app_shell div.app-shell-divider {{
+            border-left: 1px solid {COLOR_DIVIDER};
             height: 100vh;
             margin-left: 5px;
-        }
+        }}
         </style>
-        """
+        """.format(COLOR_DIVIDER=COLOR_DIVIDER) # inject divider color from defs
     
     page_style = _PAGE_STYLES.get(page, lambda: "")
+
     return styles + page_style()

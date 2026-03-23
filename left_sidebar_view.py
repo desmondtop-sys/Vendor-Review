@@ -1,5 +1,6 @@
 import streamlit as st
-from pathlib import Path
+
+from defs import Page, Main_Col_Tabs, Vendor_Page_Tabs
 
 from backend.vendor_database import create_vendor, get_all_vendor_models
 from backend.permissions import Permission
@@ -33,54 +34,56 @@ def render_page_selectors() -> None:
 
     # Add a page selector
     if "current_page" not in st.session_state:
-        st.session_state.current_page = "Dashboard"
+        st.session_state.current_page = Page.DASHBOARD.value
 
-    # Set styles for the buttons based on the current page
-    if st.session_state.current_page == "Dashboard":
-        type1 = "primary"
-        type2 = "secondary"
-        type3 = "secondary"
-    elif st.session_state.current_page == "Vendors":        
-        type1 = "secondary"
-        type2 = "primary"
-        type3 = "secondary"
-    elif st.session_state.current_page == "Settings":
-        type1 = "secondary"
-        type2 = "secondary"
-        type3 = "primary"
+    button_types = get_button_types(st.session_state.current_page)
 
-    is_scoped_vendor_user = current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS)
+    # Render vendors button for non-client users
+    if not current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS):
+        if st.button("🏢 Vendor List", width='stretch', type=button_types["vendors"], disabled=disabled):
+            st.session_state.current_page = Page.VENDORS.value
+            st.session_state.current_tab = Vendor_Page_Tabs.VENDOR_LIST.value
 
-    if not is_scoped_vendor_user:
-        if st.button("🏢 Vendor List", width='stretch', type=type2, disabled=disabled):
-            st.session_state.current_page = "Vendors"
-            st.session_state.current_tab = "Vendor List"
             # Reset vendor tracking to force vendor name reload
             if "_last_vendor_id" in st.session_state:
                 del st.session_state["_last_vendor_id"]
             st.rerun()
     
-    if st.button("📊 Analysis Dashboard", width='stretch', type=type1, disabled=disabled):
-        st.session_state.current_page = "Dashboard"
-        st.session_state.current_tab = "Dashboard"
+    # Render dashboard button for all users
+    if st.button("📊 Analysis Dashboard", width='stretch', type=button_types["dashboard"], disabled=disabled):
+        st.session_state.current_page = Page.DASHBOARD.value
+        st.session_state.current_tab = Main_Col_Tabs.DASHBOARD.value
         # Reset vendor tracking to force vendor name reload
         if "_last_vendor_id" in st.session_state:
             del st.session_state["_last_vendor_id"]
         st.rerun()
 
-
-    if not is_scoped_vendor_user:
-        if st.button("⚙️ AI Configuration", width='stretch', type=type3, disabled=disabled):
-            st.session_state.current_page = "Settings"
+    # Render AI settings button for non-client users
+    if not current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS):
+        if st.button("⚙️ AI Configuration", width='stretch', type=button_types["settings"], disabled=disabled):
+            st.session_state.current_page = Page.SETTINGS.value
             st.session_state.current_tab = None
             st.rerun()
 
+    # If user is admin, show user management button
+    if current_user_has_permission(Permission.CONTROL_USERS):
+        if st.button("👥 User Management", width='stretch', type=button_types["user_control"], disabled=disabled):
+            st.session_state.current_page = Page.USER_CONTROL.value
+            st.session_state.current_tab = None
+            # Clear any previous user search and role filters when navigating to user management
+            st.session_state.user_search = ""
+            st.session_state.selected_roles = set()
+
+            # Reset vendor tracking to force vendor name reload
+            if "_last_vendor_id" in st.session_state:
+                del st.session_state["_last_vendor_id"]
+            st.rerun()
+
     # Add new vendor button
-    if not is_scoped_vendor_user:
+    if not current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS):
         if st.button("➕ New Vendor", width='stretch', type="secondary", disabled=disabled):
             vendor_id = create_vendor("New Vendor")
             
-
             if vendor_id:
                 handle_vendor_switch(vendor_id)
 
@@ -130,3 +133,20 @@ def render_user_info() -> None:
         logout()
 
     st.divider()
+
+def get_button_types(current_page: str) -> dict:
+    """Helper function to determine button styles based on the current page."""
+    # Default state for all buttons
+    default_types = {"dashboard": "secondary", "vendors": "secondary", "settings": "secondary", "user_control": "secondary"}
+    
+    # Determine which button should be primary based on current page
+    if current_page == Page.DASHBOARD.value:
+        default_types["dashboard"] = "primary"
+    elif current_page == Page.VENDORS.value:        
+        default_types["vendors"] = "primary"
+    elif current_page == Page.SETTINGS.value:
+        default_types["settings"] = "primary"
+    elif current_page == Page.USER_CONTROL.value:
+        default_types["user_control"] = "primary"
+    
+    return default_types

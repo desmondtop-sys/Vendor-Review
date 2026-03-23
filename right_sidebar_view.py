@@ -4,7 +4,7 @@ from backend.vendor_database import create_vendor, get_vendor_documents_path
 from backend.permissions import Permission
 
 from frontend.styles import get_styles
-from frontend.state_manager import reset_states, reset_sandbox
+from frontend.state_manager import reset_uploader, reset_sandbox
 from frontend.views.shared_components_view import render_documents, render_generate_report_button, render_pdf_downloader
 from frontend.auth_helpers import current_user_has_permission
 
@@ -15,14 +15,9 @@ def render_right_sidebar() -> None:
     st.markdown(get_styles("right_sidebar"), unsafe_allow_html=True)
 
     render_uploader()
-    
-    if st.session_state.current_tab == "Assets":
-        return
 
     st.divider()
-
-    render_documents(0.8, 0.2)
-
+    
     render_generate_report_button()
 
     st.divider()
@@ -60,6 +55,6 @@ def render_uploader() -> None:
             dest_path.write_bytes(f.getbuffer())
         
         # Reset uploader widget and refresh the UI to show new files
-        reset_states()
+        reset_uploader()
         reset_sandbox()
         st.rerun()

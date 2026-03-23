@@ -2,6 +2,8 @@
 
 import streamlit as st
 
+from defs import FAIL, PASS
+
 from backend.vendor_database import generate_vendor_report_from_db, get_all_vendor_reports, get_vendor_model_by_id
 from backend.report_utils import calculate_score
 from backend.permissions import Permission
@@ -64,13 +66,13 @@ def render_compare_reports() -> None:
     controls1, comparison, controls2 = st.columns([0.39, 0.22, 0.39])
     
     with controls1:
-        render_report_controls(left_report_obj)
+        render_report_controls_comparison(left_report_obj, right_report_obj, is_left=True)
 
     with comparison:
         render_comparisons(left_report_obj, right_report_obj)
 
     with controls2:
-        render_report_controls(right_report_obj)
+        render_report_controls_comparison(right_report_obj, left_report_obj, is_left=False)
 
 def render_dropdowns(reports: list) -> None:
     """Render the report selection dropdowns for the compare reports view.
@@ -139,10 +141,10 @@ def render_report_description(report_obj, label: str) -> None:
     """
     st.markdown(f"### {label}")
             
-    score, possible, must_pass_failed = calculate_score(report_obj)
+    score, possible, critical_failure = calculate_score(report_obj)
          
     # Display summary section                
-    status, color, text_color = get_badge_styles(score, possible, must_pass_failed)
+    status, color, text_color = get_badge_styles(score, possible, critical_failure)
            
     if possible > 0:
         score_pct = (score / possible) * 100
@@ -200,6 +202,45 @@ def render_report_controls(report_obj) -> None:
                         st.caption("🔒 Evidence view is restricted to administrators only.")
 
 
+def render_report_controls_comparison(report_obj, other_report_obj, is_left: bool) -> None:
+    """Render the report controls section for comparison view, including placeholders for missing controls.
+    
+    Args:
+        report_obj: Generated VendorReport object for this side
+        other_report_obj: Generated VendorReport object for the opposite side
+        is_left: True if this is the left column, False if right
+    """
+    # Get unique control names from both reports
+    report_control_names = {c.name for c in report_obj.controls}
+    other_control_names = {c.name for c in other_report_obj.controls}
+    all_control_names = sorted(report_control_names | other_control_names)
+    
+    # Display controls in order
+    with st.container():
+        for control_name in all_control_names:
+            control = next((c for c in report_obj.controls if c.name == control_name), None)
+            other_control = next((c for c in other_report_obj.controls if c.name == control_name), None)
+            
+            if control is not None:
+                # Control exists in this report
+                status_icon = "✅" if control.status == 1 else "❌"
+                
+                with st.expander(f"{status_icon} {control.name} ({control.weight})", expanded=False):
+                    col1, col2 = st.columns([1, 2])
+                    with col1:
+                        st.metric("Status", "Pass" if control.status == 1 else "Fail")
+                        st.metric("Weight", control.weight)
+                    with col2:
+                        if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                            st.write(f"**Evidence:** {control.evidence}")
+                        else:
+                            st.caption("🔒 Evidence view is restricted to administrators only.")
+            else:
+                # Control exists in other report but not this one - show blank placeholder
+                with st.expander(f"⬜ {control_name}", expanded=False):
+                    st.caption("This control is not included in this report.")
+
+
 def render_comparisons(left_report_obj, right_report_obj) -> None:
     """Render the control comparisons for the selected reports.
     
@@ -207,32 +248,47 @@ def render_comparisons(left_report_obj, right_report_obj) -> None:
         left_report_obj: Generated VendorReport object for the left report
         right_report_obj: Generated VendorReport object for the right report
     """
-    # Loop through every control, compare status, and output a single emoji
-    for control in left_report_obj.controls:
-
-        right_control = next((c for c in right_report_obj.controls if c.name == control.name), None)
+    # Get unique control names from both reports
+    left_control_names = {c.name for c in left_report_obj.controls}
+    right_control_names = {c.name for c in right_report_obj.controls}
+    all_control_names = sorted(left_control_names | right_control_names)
     
-        if right_control is None:
-            with st.expander("➖ Removed from Report 2"):
-                st.write(f"**Status in Report 1:** {'✅ Pass' if control.status == 1 else '❌ Fail'}")
+    # Loop through every control, compare status, and output a comparison indicator
+    for control_name in all_control_names:
+        left_control = next((c for c in left_report_obj.controls if c.name == control_name), None)
+        right_control = next((c for c in right_report_obj.controls if c.name == control_name), None)
+    
+        if left_control is None:
+            # Control only exists in right report
+            with st.expander("➕ Added in Report 2"):
+                st.write(f"**Status in Report 2:** {'✅ Pass' if right_control.status == 1 else '❌ Fail'}")
                 if current_user_has_permission(Permission.VIEW_EVIDENCE):
-                    st.write(f"**Evidence:** {control.evidence}")
+                    st.write(f"**Evidence:** {right_control.evidence}")
+                else:
+                    st.caption("🔒 Evidence view is restricted to administrators only.")
+        elif right_control is None:
+            # Control only exists in left report
+            with st.expander("➖ Removed from Report 2"):
+                st.write(f"**Status in Report 1:** {'✅ Pass' if left_control.status == 1 else '❌ Fail'}")
+                if current_user_has_permission(Permission.VIEW_EVIDENCE):
+                    st.write(f"**Evidence:** {left_control.evidence}")
                 else:
                     st.caption("🔒 Evidence view is restricted to administrators only.")
         else:
-            if control.status == 1 and right_control.status == 1:
+            # Control exists in both reports
+            if left_control.status == PASS and right_control.status == PASS:
                 with st.expander("↔️ Both Pass"):
                     st.write("This control passed in both reports.")
 
-            elif control.status == 0 and right_control.status == 0:
+            elif left_control.status == FAIL and right_control.status == FAIL:
                 with st.expander("↔️ Both Fail"):
                     st.write("This control failed in both reports.")
 
-            elif control.status == 1 and right_control.status == 0:
+            elif left_control.status == PASS and right_control.status == FAIL:
                 with st.expander("📉 Pass → Fail"):
                     st.write(f"**Report 1:** ✅ Pass")
                     if current_user_has_permission(Permission.VIEW_EVIDENCE):
-                        st.caption(f"{control.evidence}")
+                        st.caption(f"{left_control.evidence}")
                     else:
                         st.caption("🔒 Evidence restricted to admins")
                     st.write(f"**Report 2:** ❌ Fail")
@@ -241,11 +297,11 @@ def render_comparisons(left_report_obj, right_report_obj) -> None:
                     else:
                         st.caption("🔒 Evidence restricted to admins")
                     
-            elif control.status == 0 and right_control.status == 1:
+            elif left_control.status == FAIL and right_control.status == PASS:
                 with st.expander("📈 Fail → Pass"):
                     st.write(f"**Report 1:** ❌ Fail")
                     if current_user_has_permission(Permission.VIEW_EVIDENCE):
-                        st.caption(f"{control.evidence}")
+                        st.caption(f"{left_control.evidence}")
                     else:
                         st.caption("🔒 Evidence restricted to admins")
                     st.write(f"**Report 2:** ✅ Pass")

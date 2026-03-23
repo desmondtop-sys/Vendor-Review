@@ -1,5 +1,8 @@
 import streamlit as st
 import plotly.express as px
+
+from defs import FAIL_CHART_COLOR, PASS_CHART_COLOR
+
 from backend.models import Report
 
 def generate_pie_chart(labels: list[str], values: list[int | float]):
@@ -57,7 +60,7 @@ def generate_report_pie_chart(report: Report):
     chart = generate_pie_chart(labels, values)
 
     # Create a color list: Red for failed (0), Green for passed (1)
-    colors = ["#a04e52" if c.status == 0 else "#24A372" for c in controls]
+    colors = [FAIL_CHART_COLOR if c.status == 0 else PASS_CHART_COLOR for c in controls]
 
     chart.update_traces(
         marker=dict(colors=colors)

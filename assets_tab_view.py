@@ -1,13 +1,15 @@
 import streamlit as st
 
+from defs import FAIL_BACKGROUND_COLOR, FAIL_TEXT_COLOR, PASS_BACKGROUND_COLOR, PASS_TEXT_COLOR, REVIEW_BACKGROUND_COLOR, REVIEW_TEXT_COLOR
+
 from backend.permissions import Permission
 from backend.bitsight_client import get_company_rating_by_name
-from backend.vendor_database import get_vendor_model_by_id, update_vendor_bitsight
+from backend.vendor_database import get_vendor_model_by_id, update_vendor_bitsight, update_vendor_website_url
 
 from frontend.auth_helpers import current_user_has_permission
 from frontend.auth_helpers import current_user_has_permission
 from frontend.styles import get_styles
-from frontend.views.shared_components_view import render_documents, render_generate_report_button, render_pdf_downloader
+from frontend.views.shared_components_view import render_documents, render_pdf_downloader
 
 
 def render_assets_page() -> None:
@@ -15,15 +17,40 @@ def render_assets_page() -> None:
 
     st.markdown(get_styles("assets"), unsafe_allow_html=True)
 
+    render_URL_input()
+
     # Bitsight API doesn't work yet. Commenting out for now
     # render_bitsight_information()
 
     render_documents(0.95, 0.05)
 
-    render_generate_report_button()
+def render_URL_input() -> None:
+    """Render input for vendor website URL in the assets tab."""
+    
+    st.subheader("📄 Vendor Website")
 
-    render_pdf_downloader()
+    vendor_id = st.session_state.get("active_vendor_id")
+    if not vendor_id:
+        return
 
+    vendor = get_vendor_model_by_id(vendor_id)
+    if not vendor:
+        return
+
+    current_url = vendor.website_URL or ""
+
+    # Vendor website URL input
+    new_url = st.text_input(
+        "Vendor Website URL",
+        value=current_url,
+        placeholder="Vendor URL",
+        help="Enter the official website URL for this vendor.",
+    )
+
+    # Update URL in database if it has changed
+    if new_url != current_url:
+        update_vendor_website_url(vendor_id, new_url if new_url else None)
+        st.success("Vendor website URL updated.")
 
 def render_bitsight_information() -> None:
     """Render Bitsight score controls."""
@@ -148,11 +175,11 @@ def render_bitsight_score() -> None:
     score_value = int(current_score) if current_score is not None else 0
     ratio = score_value / possible_score if possible_score else 0
     if ratio >= 0.75:
-        badge_bg, badge_text, badge_border = "#d4edda", "#155724", "#155724"
+        badge_bg, badge_text, badge_border = PASS_BACKGROUND_COLOR, PASS_TEXT_COLOR, PASS_TEXT_COLOR
     elif ratio >= 0.6:
-        badge_bg, badge_text, badge_border = "#fff3cd", "#856404", "#856404"
+        badge_bg, badge_text, badge_border = REVIEW_BACKGROUND_COLOR, REVIEW_TEXT_COLOR, REVIEW_TEXT_COLOR
     else:
-        badge_bg, badge_text, badge_border = "#f8d7da", "#721c24", "#721c24"
+        badge_bg, badge_text, badge_border = FAIL_BACKGROUND_COLOR, FAIL_TEXT_COLOR, FAIL_TEXT_COLOR
 
     st.markdown(
         f"""

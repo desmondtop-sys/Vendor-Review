@@ -1,11 +1,8 @@
 import streamlit as st
 
-from backend.vendor_database import (
-    generate_vendor_report_from_db,
-    get_all_vendor_models,
-    get_latest_report_for_vendor,
-    get_vendor_model_by_id,
-)
+from defs import Main_Col_Tabs
+
+from backend.vendor_database import generate_vendor_report_from_db, get_all_vendor_models, get_latest_report_for_vendor, get_vendor_model_by_id
 from backend.permissions import Permission
 
 from frontend.views.report_views.analysis_tab_view import render_analysis_tools
@@ -20,46 +17,14 @@ from frontend.utils import get_current_view_report, update_vendor_name
 from frontend.state_manager import handle_vendor_switch
 from frontend.auth_helpers import current_user_has_permission
 
-def validate_active_vendor() -> None:
-    """Validate that the active vendor still exists in the database.
-    
-    If the vendor has been deleted, clear the active_vendor_id and select 
-    another vendor or show a message to the user.
-    """
-    vendor_id = st.session_state.get("active_vendor_id")
-    assigned_vendor_id = st.session_state.get("user_assigned_vendor_id")
-
-    # Scoped-vendor users are restricted to a single assigned vendor.
-    if current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS):
-        if assigned_vendor_id is None:
-            st.session_state.active_vendor_id = None
-            st.session_state.active_report = None
-            return
-
-        if vendor_id != assigned_vendor_id:
-            st.session_state.active_vendor_id = assigned_vendor_id
-            st.session_state.active_report = None
-            st.rerun()
-    
-    if vendor_id is None:
-        return  # No vendor selected, nothing to validate
-    
-    # Check if the vendor still exists
-    vendor = get_vendor_model_by_id(vendor_id)
-    
-    if vendor is None:
-        # Vendor was deleted, clear the active vendor
-        st.session_state.active_vendor_id = None
-        st.session_state.active_report = None
-        st.warning("🗑️ The vendor you were viewing has been deleted. Please select another vendor.")
-        st.rerun()
-
 def render_main_col() -> None:
     """Render the main app column and route between dashboard and analysis views."""
 
     # Title
     with st.container(key="main_title"):
-        st.title("⚡ Vendor Security Evaluator")
+        spacer1, title_col, spacer2 = st.columns([0.3, 0.4, 0.3])
+        with title_col:
+            st.title("⚡ Vendor Security Evaluator")
 
     # Validate that the active vendor still exists (handles deletion by other users)
     validate_active_vendor()
@@ -98,19 +63,19 @@ def render_main_col() -> None:
     render_dashboard_tabs()
 
     # Route to the correct tab view
-    if st.session_state.current_tab == "Dashboard":
+    if st.session_state.current_tab == Main_Col_Tabs.DASHBOARD.value:
         render_dashboard()
         
-    elif st.session_state.current_tab == "Analysis Tools":
+    elif st.session_state.current_tab == Main_Col_Tabs.ANALYSIS_TOOLS.value:
         render_analysis_tools()
 
-    elif st.session_state.current_tab == "Assets":
+    elif st.session_state.current_tab == Main_Col_Tabs.ASSETS.value:
         render_assets_page()
 
-    elif st.session_state.current_tab == "Report History":
+    elif st.session_state.current_tab == Main_Col_Tabs.REPORT_HISTORY.value:
         render_report_history()
 
-    elif st.session_state.current_tab == "Compare Reports":
+    elif st.session_state.current_tab == Main_Col_Tabs.COMPARE_REPORTS.value:
         render_compare_reports()
 
 def render_default_view() -> None:
@@ -174,9 +139,7 @@ def render_vendor_title() -> None:
                 st.text_area(
                     "Vendor Name",
                     key="vendor_name_text_area",
-                    on_change=lambda: update_vendor_name(
-                        st.session_state.vendor_name_text_area
-                    ),
+                    on_change=lambda: update_vendor_name(st.session_state.vendor_name_text_area),
                     label_visibility="collapsed"
                 )
 
@@ -189,44 +152,78 @@ def render_dashboard_tabs() -> None:
 
     # Initialize tab variable
     if "current_tab" not in st.session_state:
-        st.session_state.current_tab = "Dashboard"
+        st.session_state.current_tab = Main_Col_Tabs.DASHBOARD.value
 
     tab1, tab2, tab3, tab4, tab5 = st.columns([0.2, 0.2, 0.2, 0.2, 0.2])
 
+    # Set styles for the buttons based on the open tab
     with tab1:
-        type1 = "primary" if st.session_state.current_tab == "Dashboard" else "secondary"
+        type1 = "primary" if st.session_state.current_tab == Main_Col_Tabs.DASHBOARD.value else "secondary"
 
         if st.button("Dashboard", type=type1, width='stretch'):
-            st.session_state.current_tab = "Dashboard"
+            st.session_state.current_tab = Main_Col_Tabs.DASHBOARD.value
             st.rerun()
 
     with tab2:
-        type2 = "primary" if st.session_state.current_tab == "Analysis Tools" else "secondary"
+        type2 = "primary" if st.session_state.current_tab == Main_Col_Tabs.ANALYSIS_TOOLS.value else "secondary"
         
         if st.button("Analysis Tools", type=type2, width='stretch'):
-            st.session_state.current_tab = "Analysis Tools"
+            st.session_state.current_tab = Main_Col_Tabs.ANALYSIS_TOOLS.value
             st.rerun()
 
     with tab3:
-        type3 = "primary" if st.session_state.current_tab == "Assets" else "secondary"
+        type3 = "primary" if st.session_state.current_tab == Main_Col_Tabs.ASSETS.value else "secondary"
         
         if st.button("Assets", type=type3, width='stretch'):
-            st.session_state.current_tab = "Assets"
+            st.session_state.current_tab = Main_Col_Tabs.ASSETS.value
             st.rerun()
 
     with tab4:
-        type4 = "primary" if st.session_state.current_tab == "Report History" else "secondary"
+        type4 = "primary" if st.session_state.current_tab == Main_Col_Tabs.REPORT_HISTORY.value else "secondary"
         
         if st.button("Report History", type=type4, width='stretch'):
-            st.session_state.current_tab = "Report History"
+            st.session_state.current_tab = Main_Col_Tabs.REPORT_HISTORY.value
             st.rerun()
 
     with tab5:
-        type5 = "primary" if st.session_state.current_tab == "Compare Reports" else "secondary"
+        type5 = "primary" if st.session_state.current_tab == Main_Col_Tabs.COMPARE_REPORTS.value else "secondary"
         
         if st.button("Compare Reports", type=type5, width='stretch'):
-            st.session_state.current_tab = "Compare Reports"
+            st.session_state.current_tab = Main_Col_Tabs.COMPARE_REPORTS.value
             st.rerun()
 
     st.divider()
 
+def validate_active_vendor() -> None:
+    """Validate that the active vendor still exists in the database.
+    
+    If the vendor has been deleted, clear the active_vendor_id and select 
+    another vendor or show a message to the user.
+    """
+    vendor_id = st.session_state.get("active_vendor_id")
+    assigned_vendor_id = st.session_state.get("user_assigned_vendor_id")
+
+    # Scoped-vendor users are restricted to a single assigned vendor.
+    if current_user_has_permission(Permission.SCOPED_VENDOR_ACCESS):
+        if assigned_vendor_id is None:
+            st.session_state.active_vendor_id = None
+            st.session_state.active_report = None
+            return
+
+        if vendor_id != assigned_vendor_id:
+            st.session_state.active_vendor_id = assigned_vendor_id
+            st.session_state.active_report = None
+            st.rerun()
+    
+    if vendor_id is None:
+        return  # No vendor selected, nothing to validate
+    
+    # Check if the vendor still exists
+    vendor = get_vendor_model_by_id(vendor_id)
+    
+    if vendor is None:
+        # Vendor was deleted, clear the active vendor
+        st.session_state.active_vendor_id = None
+        st.session_state.active_report = None
+        st.warning("🗑️ The vendor you were viewing has been deleted. Please select another vendor.")
+        st.rerun()

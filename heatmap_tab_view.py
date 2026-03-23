@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 import html
+
 from backend.vendor_database import get_all_vendor_models, get_latest_report_for_vendor
 from backend.config_manager import get_ai_requirements
 from frontend.styles import get_styles
@@ -12,10 +13,18 @@ def render_heatmap_tab_view():
     
     # Get all vendors
     vendors = get_all_vendor_models()
-    
+
+    # Get search query from search bar by key (set in render_vendors_page)
+    search_query = st.session_state.get("vendor_search", "")
+        
+    # Filter vendors based on search query
+    vendors = [
+        vendor for vendor in vendors        
+        if not search_query or (search_query.lower() in vendor.name.lower())
+    ]
+
     if not vendors:
-        st.info("No vendors found. Create a vendor to get started!")
-        return
+        st.info("No vendors found. Try adjusting your search criteria.")
     
     st.header("Vendor Control Heatmap")
 

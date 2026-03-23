@@ -1,9 +1,10 @@
 import sqlite3
 from pathlib import Path
-from datetime import datetime, timedelta
-import secrets
 import bcrypt
 import time
+
+from defs import BASE_DELAY, MAX_RETRIES
+
 from backend.models import User, UserRole
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -77,10 +78,8 @@ def _execute_update(query: str, params: tuple = ()) -> int:
     Raises:
         sqlite3.OperationalError: If database is locked after all retries exhausted.
     """
-    max_retries = 5
-    base_delay = 0.1  # 100ms base delay
     
-    for attempt in range(max_retries):
+    for attempt in range(MAX_RETRIES):
         try:
             conn = sqlite3.connect(DB_PATH, timeout=5.0)
             cursor = conn.cursor()
@@ -92,8 +91,8 @@ def _execute_update(query: str, params: tuple = ()) -> int:
                 conn.close()
         except sqlite3.OperationalError as e:
             # If database is locked and we haven't exhausted retries, wait and retry
-            if "locked" in str(e).lower() and attempt < max_retries - 1:
-                wait_time = base_delay * (2 ** attempt)  # Exponential backoff: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s
+            if "locked" in str(e).lower() and attempt < MAX_RETRIES - 1:
+                wait_time = BASE_DELAY * (2 ** attempt)  # Exponential backoff: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s
                 time.sleep(wait_time)
             else:
                 # Either not a lock error, or we've exhausted retries
@@ -129,6 +128,18 @@ def init_user_db() -> None:
 
     conn.commit()
     conn.close()
+    
+    # Create default admin user if none exists
+    # For testing purposes only. Remove when deploying to production.
+    admin_exists = _execute_select_one("SELECT id FROM users WHERE username = ?", ("admin",))
+    if not admin_exists:
+        create_user(
+            username="admin",
+            email="admin@admin.com",
+            password="admin123",
+            full_name="Administrator",
+            role="admin"
+        )
 
 
 def hash_password(password: str) -> str:
@@ -211,11 +222,11 @@ def create_user(
             (username, email, password_hash, full_name, role, assigned_vendor_id)
         )
         print(
-            f"✅ User created: {username} (ID: {user_id}, Role: {role}, Assigned Vendor: {assigned_vendor_id})"
+            f"User created: {username} (ID: {user_id}, Role: {role}, Assigned Vendor: {assigned_vendor_id})"
         )
         return user_id
     except sqlite3.IntegrityError:
-        print(f"❌ User creation failed: Username or email already exists")
+        print(f"User creation failed: Username or email already exists")
         return None
 
 
@@ -295,6 +306,145 @@ def get_user_display_name(user_id: int) -> str:
     return user['full_name'] if user['full_name'] else user['username']
 
 
+def get_all_users() -> list[User]:
+    """Fetch all users with all their information.
+
+    Returns:
+        list[User]: List of User model objects, or empty list if no users found.
+    """
+    query = """SELECT id, username, email, full_name, role, assigned_vendor_id, is_active, created_at, last_login
+               FROM users ORDER BY created_at DESC"""
+    rows = _execute_select(query, use_row_factory=True)
+    
+    users = []
+    for row in rows:
+        user = User(
+            id=row['id'],
+            username=row['username'],
+            email=row['email'],
+            full_name=row['full_name'],
+            role=UserRole(row['role']),
+            assigned_vendor_id=row['assigned_vendor_id'],
+            is_active=row['is_active'],
+            created_at=row['created_at'],
+            last_login=row['last_login'],
+        )
+        users.append(user)
+    
+    return users
+
+
+def delete_user(user_id: int) -> bool:
+    """Delete a user by their ID.
+
+    Args:
+        user_id (int): User ID to delete.
+
+    Returns:
+        bool: True if deletion succeeded, False otherwise.
+    """
+    try:
+        # Check if user exists
+        user = get_user_by_id(user_id)
+        if not user:
+            print(f"❌ User with ID {user_id} not found")
+            return False
+        
+        # Delete the user
+        rows_affected = _execute_update(
+            "DELETE FROM users WHERE id = ?",
+            (user_id,)
+        )
+        
+        if rows_affected > 0:
+            print(f"User deleted: {user['username']} (ID: {user_id})")
+            return True
+        else:
+            print(f"Failed to delete user with ID {user_id}")
+            return False
+            
+    except sqlite3.Error as e:
+        print(f"Database error while deleting user: {e}")
+        return False
+
+
+def update_user_role(user_id: int, new_role: str) -> bool:
+    """Update a user's role.
+
+    Args:
+        user_id (int): User ID to update.
+        new_role (str): New role to assign ("admin", "analyst", "client", or "viewer").
+
+    Returns:
+        bool: True if update succeeded, False otherwise.
+    """
+    try:
+        # Validate role
+        valid_roles = [r.value for r in UserRole]
+        if new_role not in valid_roles:
+            print(f"Invalid role: {new_role}. Must be one of: {', '.join(valid_roles)}")
+            return False
+        
+        # Check if user exists
+        user = get_user_by_id(user_id)
+        if not user:
+            print(f"User with ID {user_id} not found")
+            return False
+        
+        # Update the user's role
+        rows_affected = _execute_update(
+            "UPDATE users SET role = ? WHERE id = ?",
+            (new_role, user_id)
+        )
+        
+        if rows_affected > 0:
+            print(f"User role updated: {user['username']} (ID: {user_id}) -> {new_role}")
+            return True
+        else:
+            print(f"Failed to update user role with ID {user_id}")
+            return False
+            
+    except sqlite3.Error as e:
+        print(f"Database error while updating user role: {e}")
+        return False
+
+
+def update_user_assigned_vendor(user_id: int, vendor_id: int | None) -> bool:
+    """Update a user's assigned vendor.
+
+    Args:
+        user_id (int): User ID to update.
+        vendor_id (int | None): Vendor ID to assign, or None to unassign.
+
+    Returns:
+        bool: True if update succeeded, False otherwise.
+    """
+    try:
+        # Check if user exists
+        user = get_user_by_id(user_id)
+        if not user:
+            print(f"User with ID {user_id} not found")
+            return False
+        
+        # Update the user's assigned vendor
+        rows_affected = _execute_update(
+            "UPDATE users SET assigned_vendor_id = ? WHERE id = ?",
+            (vendor_id, user_id)
+        )
+        
+        if rows_affected > 0:
+            vendor_desc = f"Vendor {vendor_id}" if vendor_id else "None"
+            print(f"User assigned vendor updated: {user['username']} (ID: {user_id}) -> {vendor_desc}")
+            return True
+        else:
+            print(f"Failed to update user assigned vendor with ID {user_id}")
+            return False
+            
+    except sqlite3.Error as e:
+        print(f"Database error while updating user assigned vendor: {e}")
+        return False
+
+
 def print_users_table() -> None:
     """Print a formatted console view of all users for debugging."""
     
@@ -335,9 +485,6 @@ def print_users_table() -> None:
 if __name__ == "__main__":
     # Initialize the database
     init_user_db()
-    
-    # Example: Create a test user
-    # create_user("admin", "admin@example.com", "admin123", "Administrator", role="admin")
     
     # Print all users
     print_users_table()

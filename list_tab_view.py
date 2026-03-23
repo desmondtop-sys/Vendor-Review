@@ -1,9 +1,8 @@
 import streamlit as st
 
 from backend.models import Vendor
-from backend.vendor_database import create_vendor, generate_vendor_report_from_db, get_active_report_for_vendor, get_all_vendor_models, get_latest_report_for_vendor, get_report_by_id
+from backend.vendor_database import generate_vendor_report_from_db, get_active_report_for_vendor, get_all_vendor_models, get_latest_report_for_vendor, get_report_by_id
 
-from frontend.styles import get_styles
 from frontend.views.shared_components_view import render_delete_vendor_button, render_oneline_security_score, render_vendor_selector_button
 
 
@@ -11,6 +10,18 @@ def render_vendor_list_tab() -> None:
     """Render the Vendors page with vendor list and management controls."""
 
     vendors = get_all_vendor_models()
+
+    # Get search query
+    search_query = st.session_state.get("vendor_search", "")
+    
+    # Get search query from search bar by key (set in render_vendors_page)
+    vendors = [
+        vendor for vendor in vendors        
+        if not search_query or (search_query.lower() in vendor.name.lower())
+    ]
+    
+    if not vendors:
+        st.info("No vendors found. Try adjusting your search criteria.")
 
     for vendor in vendors:
         vendor_col, info_col, delete_col = st.columns([0.2, 0.6, 0.2])

@@ -10,6 +10,8 @@ from frontend.styles import get_styles
 from frontend.utils import get_badge_values
 from frontend.state_manager import mark_dirty
 
+from defs import DEFAULT_PRIORITY, DEFAULT_WEIGHT, MAX_PRIORITY, MIN_PRIORITY, TARGET_WEIGHT
+
 def render_ai_settings_page() -> None:
     """Render the full AI settings interface for prompt and requirement tuning."""
     
@@ -102,14 +104,14 @@ def render_instructions() -> str:
     """
 
     st.subheader("AI Instructions")
-    st.caption("This controls the 'personality' and 'rules' the AI auditor follows.")
+    st.caption("This controls the personality and rules the AI auditor follows.")
 
     # Use cached instructions from session (loaded at login)
     instructions = st.session_state.get("cached_ai_instructions", get_ai_instructions())
 
     # Calculate height of text area: number of lines * ~27 pixels + 50px buffer
     instr_line_count = instructions.count('\n') + 2
-    instr_height = max(150, instr_line_count * 27)
+    instr_height = max(150, instr_line_count * 28)
 
 
     new_instr = st.text_area(
@@ -171,58 +173,54 @@ def render_weight_assignment_button() -> None:
         if not st.session_state.temp_requirements:
             st.error("No requirements to assign weights to.")
             return
-            
-        total_weight = 1000
-        num_priority_level_1 = 0
-        num_priority_level_2 = 0
-        num_priority_level_3 = 0
-        num_priority_level_4 = 0
-        num_priority_level_5 = 0
+        
+        # Dynamically count requirements by priority level
+        priority_counts = {}
+        for priority in range(MIN_PRIORITY, MAX_PRIORITY + 1):
+            priority_counts[priority] = 0
 
         for key, data in st.session_state.temp_requirements.items():
-            priority = int(data.get("priority", 3))
-
-            if priority == 1:
-                num_priority_level_1 += 1
-            elif priority == 2:
-                num_priority_level_2 += 1   
-            elif priority == 3:
-                num_priority_level_3 += 1
-            elif priority == 4: 
-                num_priority_level_4 += 1
-            elif priority == 5:
-                num_priority_level_5 += 1
+            priority = int(data.get("priority", DEFAULT_PRIORITY))
+            if priority in priority_counts:
+                priority_counts[priority] += 1
         
         # Calculate denominator for base weight
-        denominator = (num_priority_level_1 * 1 + num_priority_level_2 * 2 + num_priority_level_3 * 3 + num_priority_level_4 * 4 + num_priority_level_5 * 5)
+        denominator = 0
+        for priority, count in priority_counts.items():
+            denominator += priority * count
         if denominator == 0:
             st.error("Cannot calculate weights: no valid priority levels found.")
             return
             
-        base_weight = total_weight / denominator
+        base_weight = TARGET_WEIGHT / denominator
 
-        # First pass: calculate and round all weights
+        # First pass: calculate and floor all weights
         weight_sum = 0
         temp_weights = {}
-        highest_priority_keys = []  # Track requirements with priority 5 (highest)
+        priority_levels = {}  # Track all items by priority level
             
         for key, data in st.session_state.temp_requirements.items():
-            priority = int(data.get("priority", 3))
-                
-            if priority == 5:  # Priority 5 is highest
-                highest_priority_keys.append(key)
+            priority = int(data.get("priority", DEFAULT_PRIORITY))
             
-            # Calculate weight and round to nearest integer
-            rounded_weight = int(round(priority * base_weight))
+            # Group items by priority level
+            if priority not in priority_levels:
+                priority_levels[priority] = []
+            priority_levels[priority].append(key)
+            
+            # Calculate weight and floor to nearest integer (rounding down to avoid overshooting target)
+            rounded_weight = int(priority * base_weight)
             temp_weights[key] = rounded_weight
             weight_sum += rounded_weight
             
-        # Second pass: distribute the difference among highest priority requirements
-        # Required because rounding is lowering the total below our target
-        difference = total_weight - weight_sum
+        # Second pass: distribute the difference among highest priority items that exist
+        difference = TARGET_WEIGHT - weight_sum
             
-        if highest_priority_keys and difference != 0:
-            # Distribute evenly
+        # Find the highest priority level that actually exists
+        if priority_levels and difference != 0:
+            highest_priority = max(priority_levels.keys())
+            highest_priority_keys = priority_levels[highest_priority]
+            
+            # Distribute evenly among highest priority items
             per_item = difference // len(highest_priority_keys)
             remainder = difference % len(highest_priority_keys)
                 
@@ -239,7 +237,7 @@ def render_weight_assignment_button() -> None:
             st.session_state[f"weight_{key}"] = weight
             
         mark_dirty()
-        st.rerun()
+        # st.rerun()
 
 def render_requirements_list() -> dict:
     """Render editable requirement rows and collect staged requirement values.
@@ -250,8 +248,10 @@ def render_requirements_list() -> dict:
     # Rebuild requirements dict from widget state each rerun.
     updated_requirements = {}
 
+    column_widths = [0.10, 0.45, 0.08, 0.08, 0.08, 0.12, 0.05]
+
     # Add header row
-    header_cols = st.columns([0.12, 0.55, 0.10, 0.08, 0.12, 0.05])
+    header_cols = st.columns(column_widths)
     with header_cols[1]:
         st.markdown('<p style="font-size:12px; font-weight:700; text-align:left;">Requirement Name</p>', unsafe_allow_html=True)
     with header_cols[2]:
@@ -259,13 +259,17 @@ def render_requirements_list() -> dict:
     with header_cols[3]:
         st.markdown('<p style="font-size:12px; font-weight:700; text-align:center;">Must Pass?</p>', unsafe_allow_html=True)
     with header_cols[4]:
+        st.markdown('<p style="font-size:12px; font-weight:700; text-align:center;">Critical Sensitive?</p>', unsafe_allow_html=True)
+        # Add info tooltip for critical fail on sensitive data
+
+    with header_cols[5]:
         st.markdown('<p style="font-size:12px; font-weight:700; text-align:center;">Weight</p>', unsafe_allow_html=True)
 
     requirement_id = 1
     for key, data in st.session_state.temp_requirements.items():
         with st.container():
             # Stable row layout keeps controls aligned across all requirements.
-            cols = st.columns([0.12, 0.55, 0.10, 0.08, 0.12, 0.05])
+            cols = st.columns(column_widths)
             
             with cols[0]:
                 st.markdown(f'<p style="font-weight: 600; margin-top: 5px;">Requirement {requirement_id}:</p>', unsafe_allow_html=True)
@@ -284,12 +288,12 @@ def render_requirements_list() -> dict:
                 )
             
             with cols[2]:
-                # Priority Input (1-5)
+                # Priority Input
                 new_priority = st.number_input(
                     "Priority", 
-                    value=int(data.get("priority", 3)), 
-                    min_value=1,
-                    max_value=5,
+                    value=int(data.get("priority", DEFAULT_PRIORITY)), 
+                    min_value=MIN_PRIORITY,
+                    max_value=MAX_PRIORITY,
                     step=1,
                     key=f"priority_{key}", 
                     label_visibility="collapsed", 
@@ -305,9 +309,21 @@ def render_requirements_list() -> dict:
                     key=f"must_{key}", 
                     on_change=mark_dirty,
                     disabled=not current_user_has_permission(Permission.EDIT_SETTINGS),
+                    help="When checked, failing this control will cause the entire report to fail.",
                 )
             
             with cols[4]:
+                # Critical Fail on Sensitive Data Toggle
+                critical_fail_sensitive = st.checkbox(
+                    "Sensitive", 
+                    value=data.get("critical_fail_on_sensitive_data", False), 
+                    key=f"critical_fail_sensitive_{key}", 
+                    on_change=mark_dirty,
+                    disabled=not current_user_has_permission(Permission.EDIT_SETTINGS),
+                    help="When checked, failing this control will cause the entire report to fail if the vendor's data type is Confidential or Restricted.",
+                )
+            
+            with cols[5]:
                 # Weight Input
                 weight_key = f"weight_{key}"
                 # Use session state value if it exists (e.g., after assign weights button),
@@ -323,12 +339,12 @@ def render_requirements_list() -> dict:
                     on_change=mark_dirty,
                     disabled=not current_user_has_permission(Permission.EDIT_SETTINGS),
                 )
-            with cols[5]:
+            with cols[6]:
                 # Delete Button
                 if st.button("🗑️", key=f"delete_{key}", on_click=mark_dirty, disabled=not current_user_has_permission(Permission.EDIT_SETTINGS)):
                     # Delete immediately from session state and rerun so UI updates instantly
                     st.session_state.temp_requirements.pop(key, None)
-                    for key_prefix in ["name_", "must_", "weight_", "priority_", "desc_", "delete_"]:
+                    for key_prefix in ["name_", "must_", "critical_fail_sensitive_", "weight_", "priority_", "desc_", "delete_"]:
                         st.session_state.pop(f"{key_prefix}{key}", None)
                     st.rerun()
             
@@ -354,7 +370,8 @@ def render_requirements_list() -> dict:
                 "weight": new_weight,
                 "priority": new_priority,
                 "description": new_desc,
-                "must_pass": is_must
+                "must_pass": is_must,
+                "critical_fail_on_sensitive_data": critical_fail_sensitive,
             }
             
             # Visual separator between control blocks
@@ -379,10 +396,11 @@ def render_new_requirement_button() -> None:
         # Add the new requirement with default values
         st.session_state.temp_requirements[new_name] = {
             "name": new_name,
-            "weight": 10,
-            "priority": 3,
+            "weight": DEFAULT_WEIGHT,
+            "priority": DEFAULT_PRIORITY,
             "description": "Describe this requirement...",
-            "must_pass": False
+            "must_pass": False,
+            "critical_fail_on_sensitive_data": False,
         }
         mark_dirty()
 
@@ -409,15 +427,22 @@ def render_submit_button(new_instr: str, updated_requirements: dict) -> None:
 
         if st.button("Save Configuration", type=type, width='stretch', disabled=not current_user_has_permission(Permission.EDIT_SETTINGS)):
 
+            # Normalize requirement keys to match their entered names so they're not always saved as "New Requirement X"
+            normalized_requirements = {}
+            for key, data in updated_requirements.items():
+                # Use the name field as the key to ensure key and name always match
+                actual_name = data.get("name", key)
+                normalized_requirements[actual_name] = data
+
             success_instr, msg_instr = set_ai_instructions(new_instr)
-            success_reqs, msg_reqs = set_ai_requirements(updated_requirements)
+            success_reqs, msg_reqs = set_ai_requirements(normalized_requirements)
             success_thresh, msg_thresh = set_threshold_settings(st.session_state.threshold_pass, st.session_state.threshold_fail)
 
             if success_instr and success_reqs and success_thresh:
                 # Update session state cache with the newly saved settings
                 # This ensures reports generated after save use the new settings
                 st.session_state.cached_ai_instructions = new_instr
-                st.session_state.cached_ai_requirements = updated_requirements
+                st.session_state.cached_ai_requirements = normalized_requirements
                 st.session_state.cached_threshold_settings = {
                     "pass_threshold": st.session_state.threshold_pass,
                     "fail_threshold": st.session_state.threshold_fail

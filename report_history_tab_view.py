@@ -40,32 +40,46 @@ def render_report_history() -> None:
         st.info("No reports yet for this vendor. Upload documents and Generate Report to create one.")
         return
 
-    st.subheader("📜 Report History")
+    title_col, runtime_col, score_col, spacer = st.columns([0.45, 0.15, 0.25, 0.15])
+    with title_col:
+        st.subheader("📜 Report History")
+    with runtime_col:
+        st.subheader("⏱️ Runtime")
+    with score_col:
+        st.subheader("📈 Security Score")
     st.divider()
 
     for report in reports:
-        # Calculate score for display
         report_obj = generate_vendor_report_from_db(report)
-        score, possible, must_pass_failed = calculate_score(report_obj)
         
         # Check if this is the currently active report
-        is_active = (st.session_state.get("active_report") and 
-                     st.session_state.active_report.id == report['id'])        
+        is_active = (st.session_state.get("active_report") and st.session_state.active_report.id == report['id'])        
 
-        col1, col2, col3, col4, col5 = st.columns([0.05, 0.55, 0.25, 0.10, 0.05])
+        col1, col2, col3, col4, col5, col6 = st.columns([0.05, 0.40, 0.15, 0.25, 0.10, 0.05])
 
+        # Print run number
         with col1:
             st.markdown(f"**v{report['run_number']}**")
 
+        # Print timestamp and summary snippet
         with col2:
             timestamp = report["timestamp"][:10] if report["timestamp"] else "Unknown"
-            st.markdown(f"_{timestamp}_ • {report['summary'][:60]}")
+            st.markdown(f"_{timestamp}_ • {report['summary'][:110]}")
 
         with col3:
+            # Show report runtime if available
+            if report_obj.runtime is not None:
+                st.markdown(f"⏱️ {report_obj.runtime:.1f}s")
+            else:
+                st.markdown("⏱️ Unknown")
+
+        # Calculate and show security score
+        with col4:
             render_oneline_security_score(report_obj)
 
-        with col4:
-            # Load report on click
+        # Active report selection button
+        with col5:
+            # Set styles for active vs inactive reports
             button_label = "Active" if is_active else "Set as Active"
             button_type = "primary" if is_active else "secondary"
             
@@ -80,8 +94,8 @@ def render_report_history() -> None:
                 st.session_state.active_report = report_obj
                 st.rerun()
 
-        with col5:
-            # Delete report button
+        # Delete report button
+        with col6:
 
             if st.button(
                 "🗑️",

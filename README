@@ -217,9 +217,11 @@ Application thresholds:
 Vendor Review Project/
 ├── README                          # This file
 ├── req.txt                         # Python dependencies
+├── defs.py                         # Constants & definitions
 │
 ├── frontend/                       # Streamlit web interface
 │   ├── app.py                      # Application entry point
+│   ├── auth_helpers.py             # Authentication utilities
 │   ├── state_manager.py            # Session state management
 │   ├── styles.py                   # CSS styling
 │   ├── utils.py                    # Helper functions
@@ -229,6 +231,7 @@ Vendor Review Project/
 │       ├── login_view.py           # Authentication interface
 │       ├── ai_settings_view.py     # Settings configuration page
 │       ├── vendors_page_view.py    # Vendor management page
+│       ├── user_control_page_view.py # User management page
 │       ├── shared_components_view.py # Reusable UI components
 │       │
 │       ├── areas/                  # Layout components
@@ -236,7 +239,7 @@ Vendor Review Project/
 │       │   ├── main_col_view.py        # Main content area
 │       │   └── right_sidebar_view.py   # File upload & actions
 │       │
-│       ├── client_side_view/       # Client upload interface
+│       ├── client_side_views/      # Client upload interface
 │       │   └── client_upload_view.py   # Document upload portal
 │       │
 │       ├── report_views/           # Report-specific tabs
@@ -277,6 +280,6 @@ Vendor Review Project/
 │               └── {report_id}/    # Individual report assets
 │
 └── Resources/                      # Images, assets, sample data
-    └── hydro_ottawa_logo.png
+```
 
-**Last Updated: March 9, 2026**
+**Last Updated: March 23, 2026**

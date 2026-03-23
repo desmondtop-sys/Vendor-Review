@@ -7,6 +7,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from defs import FAIL_BACKGROUND_COLOR, FAIL_TEXT_COLOR, PASS_BACKGROUND_COLOR, PASS_TEXT_COLOR, REVIEW_BACKGROUND_COLOR, REVIEW_TEXT_COLOR, Main_Col_Tabs
+
 from backend.models import Report, Vendor
 from backend.permissions import Permission
 from backend.IO_engine import generate_pdf_report
@@ -14,7 +16,7 @@ from backend.report_utils import calculate_score
 from backend.config_manager import get_threshold_settings
 from backend.vendor_database import get_vendor_documents_path, delete_vendor, get_vendor_model_by_id, set_vendor_nda_signed
 
-from frontend.state_manager import handle_vendor_switch, reset_states
+from frontend.state_manager import handle_vendor_switch, reset_uploader
 from frontend.utils import get_badge_styles
 from frontend.auth_helpers import current_user_has_permission
 
@@ -59,7 +61,7 @@ def render_documents(doc_width: float, del_width: float) -> None:
     visible_docs = document_files
     
     # Limit sidebar list to avoid pushing buttons too far down
-    if st.session_state.current_tab != "Assets":
+    if st.session_state.current_tab != Main_Col_Tabs.ASSETS.value:
         max_docs = 5
         visible_docs = document_files[:max_docs]
 
@@ -99,6 +101,12 @@ def render_documents(doc_width: float, del_width: float) -> None:
 
 def render_generate_report_button() -> None:
     """Render the 'Generate Report' button to trigger AI analysis of uploaded documents."""
+
+    st.subheader("Generate Report")
+    info_text = "Click the button below to generate a new report based on the currently uploaded documents"
+    if st.session_state.current_tab != Main_Col_Tabs.ASSETS.value:
+        info_text +=  " (viewable in Assets Tab)"
+    st.write(info_text + ".")
     
     # Show if the vendor has files
     vendor_id = st.session_state.get("active_vendor_id")
@@ -136,6 +144,8 @@ def render_pdf_downloader() -> None:
 
         st.subheader("📥 Download Report")
 
+        st.write("Generate a PDF summary of the current report.")
+
         if not report:
             st.info("Select a report to enable PDF download.")
             st.divider()
@@ -146,7 +156,7 @@ def render_pdf_downloader() -> None:
             st.session_state.live_pdf_data = None
 
         # Button updates the data whenever you want a fresh version
-        if st.button("🔄 Sync & Prepare PDF", width='stretch', key="sync_pdf_btn", disabled=not current_user_has_permission(Permission.DOWNLOAD_REPORTS)):
+        if st.button("🔄 Prepare PDF", width='stretch', key="sync_pdf_btn", disabled=not current_user_has_permission(Permission.DOWNLOAD_REPORTS)):
             with st.spinner("Updating report data..."):
                 # This is where we update the data value "on the fly"
                 st.session_state.live_pdf_data = generate_pdf_report()
@@ -177,7 +187,7 @@ def render_security_score(report: Report) -> None:
     markdown block showing points, percentage, and pass/fail label.
     """
 
-    score, possible, must_pass_failed = calculate_score(report)
+    score, possible, critical_failure = calculate_score(report)
 
     # Determine the color hex codes
     percentage = (score / possible) * 100 if possible > 0 else 0
@@ -186,18 +196,18 @@ def render_security_score(report: Report) -> None:
     pass_limit = thresholds["pass_threshold"]
     fail_limit = thresholds["fail_threshold"]
     
-    if must_pass_failed:
-        bg_color, text_color = "#f8d7da", "#721c24"  # Light Red
+    if critical_failure:
+        bg_color, text_color = FAIL_BACKGROUND_COLOR, FAIL_TEXT_COLOR
         result = "CRITICAL FAILURE"
     else:
         if percentage >= pass_limit:
-            bg_color, text_color = "#d4edda", "#155724"  # Light Green
+            bg_color, text_color = PASS_BACKGROUND_COLOR, PASS_TEXT_COLOR
             result = "PASSED"
         elif percentage >= fail_limit:
-            bg_color, text_color = "#fff3cd", "#856404"  # Light Orange/Yellow
+            bg_color, text_color = REVIEW_BACKGROUND_COLOR, REVIEW_TEXT_COLOR
             result = "NEEDS REVIEW"
         else:
-            bg_color, text_color = "#f8d7da", "#721c24"  # Light Red
+            bg_color, text_color = FAIL_BACKGROUND_COLOR, FAIL_TEXT_COLOR
             result = "FAILED"
     
     # Use Markdown with HTML to create the highlighted box
@@ -239,8 +249,8 @@ def render_oneline_security_score(report: Report) -> None:
         )
         return
 
-    score, possible, must_pass_failed = calculate_score(report)
-    status, status_color, text_color = get_badge_styles(score, possible, must_pass_failed)
+    score, possible, critical_failure = calculate_score(report)
+    status, status_color, text_color = get_badge_styles(score, possible, critical_failure)
 
     st.markdown(
                 f"""
@@ -327,7 +337,7 @@ def render_delete_vendor_button(vendor: Vendor | None = None) -> None:
                 if st.session_state.get("active_vendor_id") == vendor_id:
                     st.session_state.active_vendor_id = None
                     st.session_state.active_report = None
-                    reset_states()
+                    reset_uploader()
                     
                 # Reset confirmation phase
                 st.session_state[confirm_key] = False

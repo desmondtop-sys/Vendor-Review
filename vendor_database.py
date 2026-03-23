@@ -5,8 +5,10 @@ from pathlib import Path
 import json
 import time
 
+from defs import BASE_DELAY, MAX_RETRIES
+
 try:
-    from backend.models import SecurityControl, Report, Vendor
+    from backend.models import SecurityControl, Report, Vendor, DataType
 except ModuleNotFoundError:
     from models import SecurityControl, Report, Vendor
 
@@ -107,10 +109,8 @@ def _execute_update(query: str, params: tuple = ()) -> int:
     """
     # SQLite allows only one writer at a time; short lock windows are expected
     # under concurrent actions, so we retry writes with exponential backoff.
-    max_retries = 5
-    base_delay = 0.1  # 100ms base delay
     
-    for attempt in range(max_retries):
+    for attempt in range(MAX_RETRIES):
         try:
             conn = sqlite3.connect(DB_PATH, timeout=5.0)
             cursor = conn.cursor()
@@ -122,9 +122,9 @@ def _execute_update(query: str, params: tuple = ()) -> int:
                 conn.close()
         except sqlite3.OperationalError as e:
             # If database is locked and we haven't exhausted retries, wait and retry
-            if "locked" in str(e).lower() and attempt < max_retries - 1:
-                wait_time = base_delay * (2 ** attempt)  # Exponential backoff: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s
-                print(f"⏳ Database locked, retrying in {wait_time:.2f}s (attempt {attempt + 1}/{max_retries})")
+            if "locked" in str(e).lower() and attempt < MAX_RETRIES - 1:
+                wait_time = BASE_DELAY * (2 ** attempt)  # Exponential backoff: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s
+                print(f"⏳ Database locked, retrying in {wait_time:.2f}s (attempt {attempt + 1}/{MAX_RETRIES})")
                 time.sleep(wait_time)
             else:
                 # Either not a lock error, or we've exhausted retries
@@ -158,6 +158,7 @@ def init_db() -> None:
         bitsight_company_name TEXT,
         bitsight_rating INTEGER,
         bitsight_rating_date TEXT,
+        website_URL TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     """)
@@ -174,10 +175,12 @@ def init_db() -> None:
         overall_score INTEGER,
         possible_score INTEGER,
         summary TEXT,
+        data_type TEXT DEFAULT 'Restricted',
         controls_json TEXT,
         file_list_json TEXT,
         storage_path TEXT,
         excluded_json TEXT,
+        runtime REAL,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (vendor_id) REFERENCES vendors(id)
     )
@@ -277,6 +280,7 @@ def generate_vendor_from_db(db_vendor: sqlite3.Row | dict) -> Vendor:
         bitsight_company_name=db_vendor["bitsight_company_name"] if "bitsight_company_name" in db_vendor.keys() else None,
         bitsight_rating=db_vendor["bitsight_rating"] if "bitsight_rating" in db_vendor.keys() else None,
         bitsight_rating_date=db_vendor["bitsight_rating_date"] if "bitsight_rating_date" in db_vendor.keys() else None,
+        website_URL=db_vendor["website_URL"] if "website_URL" in db_vendor.keys() else None,
         created_at=db_vendor["created_at"] if "created_at" in db_vendor.keys() else None,
     )
 
@@ -314,6 +318,19 @@ def update_vendor(vendor_id: int, name: str) -> None:
     _execute_update(
         "UPDATE vendors SET name = ? WHERE id = ?",
         (name, vendor_id)
+    )
+
+
+def update_vendor_website_url(vendor_id: int, website_url: str | None) -> None:
+    """Update a vendor's website URL.
+
+    Args:
+        vendor_id (int): Vendor identifier.
+        website_url (str | None): Website URL or None to clear.
+    """
+    _execute_update(
+        "UPDATE vendors SET website_URL = ? WHERE id = ?",
+        (website_url, vendor_id)
     )
 
 
@@ -400,10 +417,9 @@ def create_report_for_vendor(vendor_id: int) -> int:
     # can race, so retry on transient failures / uniqueness conflicts.
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-    max_retries = 5
     attempt = 0
     
-    while attempt < max_retries:
+    while attempt < MAX_RETRIES:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
@@ -436,8 +452,8 @@ def create_report_for_vendor(vendor_id: int) -> int:
                 """
                 INSERT INTO vendor_reports 
                 (vendor_id, run_number, prompt, vendor_name, overall_score, possible_score, 
-                 summary, controls_json, file_list_json, excluded_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 summary, data_type, controls_json, file_list_json, excluded_json, runtime)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     vendor_id,
@@ -447,9 +463,11 @@ def create_report_for_vendor(vendor_id: int) -> int:
                     overall_score,
                     possible,
                     summary,
+                    "Restricted",
                     controls_json,
                     file_list_json,
                     excluded_json,
+                    None,
                 ),
             )
 
@@ -474,11 +492,11 @@ def create_report_for_vendor(vendor_id: int) -> int:
             
         except sqlite3.IntegrityError as e:
             # Duplicate run_number due to concurrent creation
-            if "idx_vendor_run_unique" in str(e) and attempt < max_retries - 1:
-                print(f"⏳ Report version conflict (attempt {attempt + 1}/{max_retries}), retrying...")
+            if "idx_vendor_run_unique" in str(e) and attempt < MAX_RETRIES - 1:
+                print(f"⏳ Report version conflict (attempt {attempt + 1}/{MAX_RETRIES}), retrying...")
                 conn.close()
                 attempt += 1
-                time.sleep(0.1 * (2 ** attempt))  # Exponential backoff
+                time.sleep(BASE_DELAY * (2 ** attempt))  # Exponential backoff
             else:
                 conn.close()
                 raise
@@ -573,12 +591,12 @@ def save_report(report: Report) -> int | None:
         cursor.execute("""
             UPDATE vendor_reports 
             SET prompt = ?, vendor_name = ?, overall_score = ?, possible_score = ?, 
-                summary = ?, controls_json = ?, file_list_json = ?, storage_path = ?,
-                excluded_json = ?, version = ?
+                summary = ?, data_type = ?, controls_json = ?, file_list_json = ?, storage_path = ?,
+                excluded_json = ?, runtime = ?, version = ?
             WHERE id = ?
         """, (report.prompt, report.vendor_name, report.overall_score, report.possible_score, 
-              report.summary, controls_json, file_list_json, path_str, excluded_json, 
-              new_version, report.id))
+              report.summary, report.data_type.value if report.data_type else "Restricted", controls_json, file_list_json, path_str, excluded_json, 
+              report.runtime, new_version, report.id))
         
         # Update the report object's version to reflect the new version
         report.version = new_version
@@ -715,6 +733,18 @@ def generate_vendor_report_from_db(db_report: sqlite3.Row | dict) -> Report:
     controls_data = json.loads(db_report['controls_json'])
     file_names = json.loads(db_report['file_list_json'])
     excluded_data = json.loads(db_report['excluded_json']) if db_report['excluded_json'] else []
+    
+    # Parse data_type, defaulting to Restricted if not present
+    # Handle both sqlite3.Row and dict types safely
+    try:
+        data_type_str = db_report['data_type']
+    except (KeyError, IndexError):
+        data_type_str = 'Restricted'
+    
+    try:
+        data_type = DataType(data_type_str)
+    except (ValueError, KeyError):
+        data_type = DataType.RESTRICTED
 
     return Report(
         id=db_report["id"],
@@ -723,13 +753,15 @@ def generate_vendor_report_from_db(db_report: sqlite3.Row | dict) -> Report:
         overall_score=db_report["overall_score"],
         possible_score=db_report["possible_score"],
         summary=db_report["summary"],
+        data_type=data_type,
         controls=[SecurityControl(**c) for c in controls_data],
         file_names=file_names,
         storage_path=db_report["storage_path"],
         excluded_names=excluded_data,
         run_number=db_report["run_number"],
         version=int(db_report["version"]) if "version" in db_report.keys() else 1,
-        timestamp=db_report["timestamp"]
+        timestamp=db_report["timestamp"],
+        runtime=db_report["runtime"] if "runtime" in db_report.keys() else None,
     )
 
 
@@ -760,6 +792,7 @@ def print_vendors_table() -> None:
             print(f"Bitsight Company Name: {row['bitsight_company_name'] or 'N/A'}")
             print(f"Bitsight Rating: {row['bitsight_rating'] or 'N/A'}")
             print(f"Bitsight Rating Date: {row['bitsight_rating_date'] or 'N/A'}")
+            print(f"Website URL: {row['website_URL'] or 'N/A'}")
             print("-" * 120)
             
     except sqlite3.Error as e:
@@ -861,22 +894,6 @@ def delete_database() -> None:
 
 if __name__ == "__main__":
 
-    # Have to change hardcoded values to be able to delete the database
-    fr = False
-    if (fr == True):
-        print("Deleting Database...\n")
-        delete_database()
-
     init_db()
 
-    # print(get_all_reports())  # Function removed - was unused
-
     print_vendors_table()
-
-    #print_reports_table()
-
-    # Have to change hardcoded values to be able to wipe the database
-    seriously = False
-    if (seriously == True):
-        print("Wiping Database... \n")
-        cleanup_database()

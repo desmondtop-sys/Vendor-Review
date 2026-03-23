@@ -1,6 +1,8 @@
 
+from defs import FAIL
+
 from backend.vendor_database import get_report_by_id, generate_vendor_report_from_db
-from backend.models import SecurityControl, Report
+from backend.models import DataType, SecurityControl, Report
 
 def calculate_score(report: Report) -> tuple[int | float, int | float, bool]:
     """Compute achieved score, possible score, and must-pass failure flag.
@@ -11,13 +13,13 @@ def calculate_score(report: Report) -> tuple[int | float, int | float, bool]:
 
     Returns:
         tuple[int | float, int | float, bool]:
-            "(score, possible, must_pass_failed)" for included controls.
+            "(score, possible, critical_failure)" for included controls.
     """
 
     # Default values
     score = 0
     possible = 0
-    must_pass_failed = False
+    critical_failure = False
 
     # Evaluate controls. Return default values if none exist
     if report and report.controls:
@@ -27,10 +29,20 @@ def calculate_score(report: Report) -> tuple[int | float, int | float, bool]:
                 score += (control.status * control.weight)
                 possible += control.weight
 
-                if control.must_pass and control.status == 0:
-                    must_pass_failed = True
+                # If a control fails, check if it's a must-pass or if the data type is Confidential/Restricted
+                if check_critical_failure(control, report.data_type):
+                    critical_failure = True
 
-    return score, possible, must_pass_failed
+    return score, possible, critical_failure
+
+# Check if a control failure should be counted as critical
+def check_critical_failure(control, data_type) -> bool:
+    if control.status == FAIL:
+        if control.must_pass:
+            return True
+        if control.critical_fail_on_sensitive_data and data_type in [DataType.CONFIDENTIAL, DataType.RESTRICTED]:
+            return True
+    return False
 
 def calculate_total_weight(session_state) -> int | float:
     """Sum requirement weights from Streamlit session state.

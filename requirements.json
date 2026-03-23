@@ -1,142 +1,170 @@
 {
     "3rd Party": {
         "name": "3rd Party",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Are 3rd Party Questionnaires and/or OEB_CSF_Governance_Templates completed and overall threat and risk analysis meet acceptable risk standards?",
-        "must_pass": false
-    },
-    "Data Type": {
-        "name": "Data Type",
-        "weight": 50,
-        "priority": 3,
-        "description": "Is the type of data deemed sensitive? (i.e. Customer, Employee, Financial)",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Privacy Impact Assessment": {
         "name": "Privacy Impact Assessment",
-        "weight": 50,
-        "priority": 3,
+        "weight": 67,
+        "priority": 5,
         "description": "Has a Privacy Impact Assessment been completed for Hydro Ottawa? Promises to do assessments in the future do not count.",
-        "must_pass": true
+        "must_pass": true,
+        "critical_fail_on_sensitive_data": true
     },
     "Assurances/Attestation": {
         "name": "Assurances/Attestation",
-        "weight": 50,
-        "priority": 3,
+        "weight": 67,
+        "priority": 5,
         "description": "3rd Party Assurances or Attestation provided through one of the following:\nISO 27001; Proof of conformance to an Information Security Management System\nSOC 2 Type II\nPrivacy Shield\nData Privacy Addendum that confroms to a relevant privacy standard\nCSA Consensus Assessment Initiatve Questionnaire completed\nPenetration Testing\nOther?",
-        "must_pass": false
-    },
-    "Cybersecurity Requirements Spreadsheet": {
-        "name": "Cybersecurity Requirements Spreadsheet",
-        "weight": 50,
-        "priority": 3,
-        "description": "Has the Baseline Cybersecurity Requirements spreadsheet been completed and results show satisfactory compliance?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Security Awareness": {
         "name": "Security Awareness",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Supporting documentation demonstrating cybersecurity practice provided such as Cybersecurity Policy, Privacy Policy, Incident Management Plan, etc.. or Other relevant documentation.",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Business Continuity": {
         "name": "Business Continuity",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Are business continuity and disaster recovery plans established and subject to testing at planned intervals?",
-        "must_pass": false
-    },
-    "Incident History": {
-        "name": "Incident History",
-        "weight": 50,
-        "priority": 3,
-        "description": "Have any past public cybersecurity and privacy incidents occured such as privacy breach, ransomware, other infilitration?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Contract Assurances": {
         "name": "Contract Assurances",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Does the vendor use Strong Cybersecurity & Privacy Language in the Contract?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Incident Management": {
         "name": "Incident Management",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Are Incident Management plans present and regularly tested (incident response plans)?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Supply Chain Security": {
         "name": "Supply Chain Security",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Is Cybersecurity Supply Chain management present and do 3rd parties adhere to same rigor and responsibility?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Information Security Governance": {
         "name": "Information Security Governance",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Are Cybersecurity controls in place and do they provide the necessary level of due diligence to protect the confidentiaility, integrity and availability of Hydro Ottawa data?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "General Security Awareness": {
         "name": "General Security Awareness",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Is Security Awareness training built into the organizational culture?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Cybersecurity Governance": {
         "name": "Cybersecurity Governance",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Is there a Governance program present and does it incorporate Cybersecurity?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Personnel Security & Ethics Compliance": {
         "name": "Personnel Security & Ethics Compliance",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Is there an employee code of conduct or ethics compliance part of organization training? Does it require attestation?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Software Development Life Cycle": {
         "name": "Software Development Life Cycle",
-        "weight": 50,
-        "priority": 3,
+        "weight": 67,
+        "priority": 5,
         "description": "Is SDLC in place and part of software development processes?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Insider Risk Management": {
         "name": "Insider Risk Management",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Does an Insider Threat Program exist?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "IT Change Control": {
         "name": "IT Change Control",
-        "weight": 50,
-        "priority": 3,
+        "weight": 53,
+        "priority": 4,
         "description": "Does a Change Management Policy exist?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Data Loss Prevention": {
         "name": "Data Loss Prevention",
-        "weight": 50,
-        "priority": 3,
+        "weight": 53,
+        "priority": 4,
         "description": "Does a Data loss prevention practice exist?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
     },
     "Security Breach Notification": {
         "name": "Security Breach Notification",
-        "weight": 50,
+        "weight": 40,
         "priority": 3,
         "description": "Does a Breach notification process exist?",
-        "must_pass": false
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": true
+    },
+    "SOC 2 Report": {
+        "name": "SOC 2 Report",
+        "weight": 67,
+        "priority": 5,
+        "description": "Was a SOC 2 report supplied? A vendor having a SOC 2 report indicates that they care about security enough to become verified and is a good indicator.",
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": false
+    },
+    "Trust Center": {
+        "name": "Trust Center",
+        "weight": 66,
+        "priority": 5,
+        "description": "Does a Trust Center exist for this vendor? A vendor having a trust center is a good indicator that their security protocols are of good quality.",
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": false
+    },
+    "Publically Disclosed Vulnerabilities": {
+        "name": "Publically Disclosed Vulnerabilities",
+        "weight": 40,
+        "priority": 3,
+        "description": "Does the vendor have any publically known vulnerabilities against the product? Search the internet and the vendor's website to confirm. If they do, fail this control.",
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": false
+    },
+    "Past Security Breaches": {
+        "name": "Past Security Breaches",
+        "weight": 40,
+        "priority": 3,
+        "description": "Has the vendor been involved in any past cybersecurity breaches or privacy incidents? Search the internet and the vendor's website to confirm. If they do, fail this control.",
+        "must_pass": false,
+        "critical_fail_on_sensitive_data": false
     }
 }

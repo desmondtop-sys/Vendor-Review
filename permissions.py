@@ -4,31 +4,34 @@ from backend.models import UserRole
 class Permission(str, Enum):
     """Action permissions for different features."""
     # Report permissions
-    VIEW_REPORTS                = "view_reports"
-    CREATE_REPORTS              = "create_reports"
-    DELETE_REPORTS              = "delete_reports"
-    SELECT_REPORTS              = "select_reports"
-    DOWNLOAD_REPORTS            = "download_reports"
-    VIEW_SUMMARIES              = "view_summaries"
-    VIEW_EVIDENCE               = "view_evidence"
+    VIEW_REPORTS                = "View Reports"
+    CREATE_REPORTS              = "Create Reports"
+    DELETE_REPORTS              = "Delete Reports"
+    SELECT_REPORTS              = "Select Reports"
+    DOWNLOAD_REPORTS            = "Download Reports"
+    VIEW_SUMMARIES              = "View Summaries"
+    VIEW_EVIDENCE               = "View Evidence"
 
     # Vendor permissions
-    CREATE_VENDORS              = "create_vendors"
-    DELETE_VENDORS              = "delete_vendors"
-    SCOPED_VENDOR_ACCESS        = "scoped_vendor_access"   # Permission for clients - allows access only to their assigned vendor
+    CREATE_VENDORS              = "Create Vendors"
+    DELETE_VENDORS              = "Delete Vendors"
+    SCOPED_VENDOR_ACCESS        = "Scoped Vendor Access"   # Permission for clients - allows access only to their assigned vendor
 
     # Document permissions
-    VIEW_DOCUMENTS              = "view_documents"
-    UPLOAD_DOCUMENTS            = "upload_documents"
-    DOWNLOAD_DOCUMENTS          = "download_documents"
-    DELETE_DOCUMENTS            = "delete_documents"
-    VIEW_NDA_DOCUMENTS          = "view_nda_documents"
+    VIEW_DOCUMENTS              = "View Documents"
+    UPLOAD_DOCUMENTS            = "Upload Documents"
+    DOWNLOAD_DOCUMENTS          = "Download Documents"
+    DELETE_DOCUMENTS            = "Delete Documents"
+    VIEW_NDA_DOCUMENTS          = "View NDA Documents"
+
+    # User management permissions
+    CONTROL_USERS               = "Control Users"
 
     # Other permissions
-    EDIT_SETTINGS               = "edit_settings"
-    TOGGLE_NDA                  = "toggle_nda"
-    TOGGLE_CONTROL_INCLUSION    = "toggle_control_inclusion"
-    MANAGE_BITSIGHT             = "manage_bitsight"
+    EDIT_SETTINGS               = "Edit Settings"
+    TOGGLE_NDA                  = "Toggle NDA"
+    TOGGLE_CONTROL_INCLUSION    = "Toggle Control Inclusion"
+    MANAGE_BITSIGHT             = "Manage Bitsight"
 
 # Map roles to their permissions
 ROLE_PERMISSIONS = {
@@ -49,6 +52,8 @@ ROLE_PERMISSIONS = {
         Permission.DELETE_DOCUMENTS,
         Permission.UPLOAD_DOCUMENTS,
         Permission.VIEW_NDA_DOCUMENTS,
+
+        Permission.CONTROL_USERS,
 
         Permission.EDIT_SETTINGS,
         Permission.TOGGLE_NDA,

@@ -6,6 +6,7 @@ from backend.permissions import Permission
 from backend.charts import generate_report_pie_chart
 from backend.report_utils import get_control_by_name
 
+from defs import SECONDARY_TEXT_COLOR, INFO_BACKGROUND_COLOR, INFO_TEXT_COLOR
 from frontend.styles import get_styles
 from frontend.views.shared_components_view import render_security_score, render_vertical_divider
 from frontend.utils import get_current_view_report, save_simulation_as_new_report
@@ -114,7 +115,7 @@ def render_requirements() -> None:
                     <p style="margin-bottom: 0px; font-weight: 600;">
                         <span class="vendor-label">{control.name}</span>
                     </p>
-                    <p style="font-size: 0.85rem; color: #5D7B93; margin-top: -5px;">
+                    <p style="font-size: 0.85rem; color: {SECONDARY_TEXT_COLOR}; margin-top: -5px;">
                         Original Weight: {original_weight} pts
                     </p>
                 """, unsafe_allow_html=True)
@@ -150,15 +151,15 @@ def render_save_simulation_panel() -> None:
 
     st.markdown(
         """
-        <div style="background-color: #E8F2FF; border-radius: 10px; padding: 18px;">
-            <div style="text-align: center; font-weight: 700; color: #2B4A6F;">
+        <div style="background-color: {bg_color}; border-radius: 10px; padding: 18px;">
+            <div style="text-align: center; font-weight: 700; color: {text_color};">
                 SAVE SIMULATION
             </div>
-            <div style="text-align: center; font-size: 0.95rem; color: #2B4A6F; margin-top: 6px;">
+            <div style="text-align: center; font-size: 0.95rem; color: {text_color}; margin-top: 6px;">
                 Save current sandbox settings as a new report version.
             </div>
         </div>
-        """,
+        """.format(bg_color=INFO_BACKGROUND_COLOR, text_color=INFO_TEXT_COLOR),
         unsafe_allow_html=True
     )
 

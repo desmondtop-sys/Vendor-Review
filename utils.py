@@ -1,15 +1,17 @@
 import sqlite3
 import streamlit as st
 
+from defs import FAIL_BACKGROUND_COLOR, FAIL_TEXT_COLOR, PASS_BACKGROUND_COLOR, PASS_TEXT_COLOR, REVIEW_BACKGROUND_COLOR, REVIEW_TEXT_COLOR, Main_Col_Tabs
+
 from backend.config_manager import get_ai_requirements, get_threshold_settings
-from backend.report_utils import calculate_score, calculate_total_weight, report_to_string
+from backend.report_utils import calculate_score, calculate_total_weight
 from backend.vendor_database import create_report_for_vendor, generate_vendor_report_from_db, get_report_by_id, save_report, update_vendor, get_latest_report_for_vendor, set_active_report_for_vendor, get_vendor_documents_path
 from backend.models import Report
 from backend.AI_logic import generate_report
 from backend.IO_engine import detect_locked_pdfs
 from backend.pdf_password_manager import load_pdf_passwords, save_pdf_passwords
 
-from frontend.state_manager import handle_report_switch, reset_states, reset_sandbox
+from frontend.state_manager import handle_report_switch, reset_uploader, reset_sandbox
 
 def get_pdf_passwords_from_ui() -> dict:
     """Display a form to collect passwords for locked PDFs in the active vendor's folder.
@@ -114,6 +116,8 @@ def run_analysis() -> None:
             # Load the latest report (which should be the new version)
             latest_report_row = get_latest_report_for_vendor(vendor_id)
             st.session_state.active_report = generate_vendor_report_from_db(latest_report_row)
+            # Update session state with the new vendor name for display
+            st.session_state["vendor_name_text_area"] = new_report.vendor_name
             # Save this as the active report for the vendor
             if latest_report_row:
                 set_active_report_for_vendor(vendor_id, latest_report_row['id'])
@@ -131,10 +135,10 @@ def run_analysis() -> None:
         st.session_state.pdf_passwords = {}  # Clear passwords after use
         st.session_state.pending_passwords_to_save = {}
         st.session_state.ready_to_generate = False
-        reset_states()
+        reset_uploader()
         reset_sandbox()
-        st.session_state.current_tab = "Dashboard"
-        st.rerun()
+        st.session_state.current_tab = Main_Col_Tabs.DASHBOARD.value
+        st.rerun() 
 
 def save_simulation_as_new_report() -> None:
     """Create a new report version from the current simulation state."""
@@ -163,6 +167,7 @@ def save_simulation_as_new_report() -> None:
     new_report.vendor_name = sim_report.vendor_name
     new_report.controls = sim_report.controls
     new_report.summary = sim_report.summary
+    new_report.data_type = sim_report.data_type
     new_report.overall_score = int(score)
     new_report.possible_score = int(possible)
     new_report.file_names = list(sim_report.file_names)
@@ -264,22 +269,22 @@ def get_badge_values() -> tuple:
 
         total_weight = calculate_total_weight(st.session_state)
         
-        badge_bg, badge_text = "#d4edda", "#155724"
+        badge_bg, badge_text = PASS_BACKGROUND_COLOR, PASS_TEXT_COLOR
         badge_label = f"{total_weight}"
         
     except Exception as e:
-        badge_bg, badge_text = "#f8d7da", "#721c24"
+        badge_bg, badge_text = FAIL_BACKGROUND_COLOR, FAIL_TEXT_COLOR
         badge_label = "🚫 JSON Error"
     
     return badge_bg, badge_text, badge_label
 
-def get_badge_styles(score, possible, must_pass_failed) -> tuple[str, str, str]:
+def get_badge_styles(score, possible, critical_failure) -> tuple[str, str, str]:
     """Determine badge styles based on score and thresholds."""
 
     if possible <= 0:
         status = "❌ FAILED"
-        color = "#f8d7da"
-        text_color = "#721c24"
+        color = FAIL_BACKGROUND_COLOR
+        text_color = FAIL_TEXT_COLOR
         return status, color, text_color
     
     score_pct = (score / possible) * 100
@@ -289,21 +294,21 @@ def get_badge_styles(score, possible, must_pass_failed) -> tuple[str, str, str]:
     pass_limit = thresholds["pass_threshold"]
     fail_limit = thresholds["fail_threshold"]
 
-    if must_pass_failed:
+    if critical_failure:
         status = "🛑 CRITICAL FAILURE"
-        color = "#f8d7da"
-        text_color = "#721c24"
+        color = FAIL_BACKGROUND_COLOR
+        text_color = FAIL_TEXT_COLOR
     elif score_pct >= pass_limit:
         status = "✅ PASSED"
-        color = "#d4edda"
-        text_color = "#155724"
+        color = PASS_BACKGROUND_COLOR
+        text_color = PASS_TEXT_COLOR
     elif score_pct >= fail_limit:
         status = "⚠️ NEEDS REVIEW"
-        color = "#fff3cd"
-        text_color = "#856404"
+        color = REVIEW_BACKGROUND_COLOR
+        text_color = REVIEW_TEXT_COLOR
     else:
         status = "❌ FAILED"
-        color = "#f8d7da"
-        text_color = "#721c24"
+        color = FAIL_BACKGROUND_COLOR
+        text_color = FAIL_TEXT_COLOR
     
     return status, color, text_color
